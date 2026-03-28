@@ -78,32 +78,17 @@ import {
 const GAS_URL = "https://script.google.com/macros/s/AKfycbwpwQu-ANqGKTXJdagOHko55TgmZvRtz7siwlqLaPNR4p8La3f-k9xXlc4ObCZ8c6IV/exec";
 const ZHUYIN_URL = "https://raw.githubusercontent.com/Kathy594520/-/main/BpmfZihiOnly-R.ttf";
 
-// ─── Firebase 設定（填入您的專案參數後即啟用雲端同步） ────────────
-// 請至 https://console.firebase.google.com 建立專案，
-// 啟用「Authentication → Google」及「Realtime Database」，
-// 再將下方 YOUR_* 替換為您的實際參數。
-// Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
-
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
-const firebaseConfig = {
-  apiKey: "AIzaSyBAjAAklC11qZJ2Web1cSrvRYlFT7zBeDM",
-  authDomain: "class-blackboard-83477.firebaseapp.com",
-  databaseURL: "https://class-blackboard-83477-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "class-blackboard-83477",
-  storageBucket: "class-blackboard-83477.firebasestorage.app",
+// ─── Firebase 設定 ────────────────────────────────────────────
+const FB_CONFIG = {
+  apiKey:            "AIzaSyBAjAAklC11qZJ2Web1cSrvRYlFT7zBeDM",
+  authDomain:        "class-blackboard-83477.firebaseapp.com",
+  databaseURL:       "https://class-blackboard-83477-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId:         "class-blackboard-83477",
+  storageBucket:     "class-blackboard-83477.firebasestorage.app",
   messagingSenderId: "220112790935",
-  appId: "1:220112790935:web:19d648986484e6e18850d2",
-  measurementId: "G-SCWJ9P936Y"
+  appId:             "1:220112790935:web:19d648986484e6e18850d2"
 };
-
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);// 偵測是否已填寫設定
+// 偵測是否已填寫設定
 const FB_READY = typeof firebase !== 'undefined' && !FB_CONFIG.apiKey.startsWith('YOUR');
 let fbAuth = null, fbDb = null;
 if (FB_READY) {
