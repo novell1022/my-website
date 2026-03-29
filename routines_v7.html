@@ -88,9 +88,6 @@ const FB_CONFIG = {
   messagingSenderId: "220112790935",
   appId:             "1:220112790935:web:19d648986484e6e18850d2"
 };
-// ─── 授權帳號（只有此 email 可登入，換成您自己的 Google 帳號） ──
-const ALLOWED_EMAIL = "YOUR_EMAIL@gmail.com";
-
 // 偵測是否已填寫設定
 const FB_READY = typeof firebase !== 'undefined' && !FB_CONFIG.apiKey.startsWith('YOUR');
 let fbAuth = null, fbDb = null;
@@ -507,12 +504,6 @@ const App = () => {
     const unsub = fbAuth.onAuthStateChanged(async user => {
       setFbUser(user);
       if (user) {
-        // 驗證帳號白名單
-        if (ALLOWED_EMAIL !== 'YOUR_EMAIL@gmail.com' && user.email !== ALLOWED_EMAIL) {
-          fbAuth.signOut();
-          setFbPhase('login');
-          return;
-        }
         setSyncStatus('syncing');
         try {
           const snap = await fbDb.ref(`classroom/${user.uid}`).get();
@@ -563,17 +554,7 @@ const App = () => {
   }, syncKeys);
 
   // ── 登入 / 登出 ──
-  const signIn = () => {
-    if (!fbAuth) return;
-    fbAuth.signInWithPopup(new firebase.auth.GoogleAuthProvider())
-      .then(result => {
-        if (ALLOWED_EMAIL !== 'YOUR_EMAIL@gmail.com' && result.user.email !== ALLOWED_EMAIL) {
-          fbAuth.signOut();
-          alert(`此帳號（${result.user.email}）未獲授權。\n請用 ${ALLOWED_EMAIL} 登入。`);
-        }
-      })
-      .catch(e => alert('登入失敗：' + e.message));
-  };
+  const signIn  = () => fbAuth && fbAuth.signInWithPopup(new firebase.auth.GoogleAuthProvider()).catch(e=>alert('登入失敗：'+e.message));
   const signOut = () => fbAuth && fbAuth.signOut().then(()=>{ setSyncStatus('local'); setFbPhase('login'); });
 
   // ── 寫入 localStorage ──
@@ -771,55 +752,17 @@ const App = () => {
     a.download=`班級紀錄_${curDateKey}.csv`; a.click();
   };
 
-  // ── 上傳至 GAS 試算表（出缺勤 + 作業紀錄） ──
+  // ── 雲端上傳 ──
   const uploadCloud = async () => {
     if (!students.length) { alert('名冊是空的！'); return; }
     setIsUploading(true);
-
-    const statusLabel = { idle:'未到', present:'準時', late_absent:'遲到未到', late_arrived:'遲到已到' };
-    const hwLabel     = { submitted:'已繳交', correction:'需訂正', completed:'已完成' };
-    const sorted      = [...students].sort((a,b) => a.id - b.id);
-
-    // 出缺勤列（每位學生一行）
-    const attendanceRows = sorted.map(s => {
-      const r = getRecord(curDateKey, s.id);
-      return {
-        id:          s.id,
-        name:        s.name,
-        status:      statusLabel[r.status] || '未到',
-        arrivalTime: r.arrivalTime || '--',
-        brushing:    r.brushing ? 'V' : ''
-      };
-    });
-
-    // 作業列（每位學生 × 每個勾選項目 = 一行）
-    const homeworkRows = [];
-    sorted.forEach(s => {
-      const hw = getRecord(curDateKey, s.id).homework || {};
-      activeHwItems.forEach(item => {
-        homeworkRows.push({
-          id:     s.id,
-          name:   s.name,
-          item:   item.name,
-          status: hwLabel[hw[item.id]] || '未繳'
-        });
-      });
-    });
-
     const payload = {
-      date:           curDateKey,
-      attendanceRows,
-      homeworkRows    // 若今日無勾選作業項目則為空陣列，GAS 端自動略過
+      date: curDateKey,
+      students: [...students].sort((a,b)=>a.id-b.id).map(s=>({...s,...getRecord(curDateKey,s.id)}))
     };
-
     try {
-      await fetch(GAS_URL, {
-        method:'POST', mode:'no-cors',
-        headers:{'Content-Type':'text/plain;charset=utf-8'},
-        body: JSON.stringify(payload)
-      });
-      const hwNote = activeHwItems.length ? `、作業紀錄 ${activeHwItems.length} 項` : '（今日無作業項目）';
-      alert(`已上傳 ${curDateKey} 的出缺勤${hwNote}！\n請直接確認試算表。`);
+      await fetch(GAS_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload)});
+      alert('資料已傳送！請直接確認試算表。');
     } catch { alert('上傳失敗，請檢查網路或 GAS 設定。'); }
     finally { setIsUploading(false); }
   };
@@ -1157,22 +1100,16 @@ const App = () => {
                 </span>
               </button>
               {/* 日期導航（與黑板同步） */}
-              <div className="flex items-center gap-2 mt-2">
+              <div className="flex items-center gap-3 mt-2">
                 <button onClick={()=>setActiveDate(d=>addDays(d,-1))} className="p-1 hover:bg-gray-100 rounded transition-colors"><ChevronLeft className="w-4 h-4 text-retro-ink"/></button>
-                <div className="relative">
-                  <div className={`flex items-center gap-2 px-3 py-1 border-2 font-mono text-sm font-bold cursor-pointer ${
-                    isToday                                          ? 'border-retro-ink bg-retro-paper text-retro-ink'
-                    : curDateKey > toDateKey(new Date())             ? 'border-retro-blue bg-blue-50 text-retro-blue'
-                    :                                                  'border-retro-red bg-red-50 text-retro-red'
-                  }`}>
-                    {!isToday && curDateKey < toDateKey(new Date()) && <span className="text-[10px] font-black bg-retro-red text-white px-1">歷史</span>}
-                    {!isToday && curDateKey > toDateKey(new Date()) && <span className="text-[10px] font-black bg-retro-blue text-white px-1">預排</span>}
-                    {curDateKey}
-                  </div>
-                  <input type="date" value={curDateKey}
-                    onChange={e=>{ if(e.target.value) setActiveDate(new Date(e.target.value+'T00:00:00')); }}
-                    className="absolute inset-0 opacity-0 cursor-pointer w-full"
-                    title="點選直接選擇日期"/>
+                <div className={`flex items-center gap-2 px-3 py-1 border-2 font-mono text-sm font-bold ${
+                  isToday                                          ? 'border-retro-ink bg-retro-paper text-retro-ink'
+                  : curDateKey > toDateKey(new Date())             ? 'border-retro-blue bg-blue-50 text-retro-blue'
+                  :                                                  'border-retro-red bg-red-50 text-retro-red'
+                }`}>
+                  {!isToday && curDateKey < toDateKey(new Date()) && <span className="text-[10px] font-black bg-retro-red text-white px-1">歷史</span>}
+                  {!isToday && curDateKey > toDateKey(new Date()) && <span className="text-[10px] font-black bg-retro-blue text-white px-1">預排</span>}
+                  {curDateKey}
                 </div>
                 <button onClick={()=>setActiveDate(d=>addDays(d,1))} className="p-1 hover:bg-gray-100 rounded transition-colors"><ChevronRight className="w-4 h-4 text-retro-ink"/></button>
               </div>
@@ -1298,17 +1235,11 @@ const App = () => {
             {/* 日期導航（與左欄同步） */}
             <div className="flex items-center gap-2 font-mono text-[#eceff1]">
               <button onClick={()=>setActiveDate(d=>addDays(d,-1))} className="hover:text-white hover:scale-125 transition-transform p-1"><ChevronLeft className="w-5 h-5"/></button>
-              <div className="relative">
-                <span className={`block border-b-2 px-3 py-0.5 text-sm font-bold cursor-pointer ${
-                  isToday                                ? 'border-white/40'
-                  : curDateKey > toDateKey(new Date())  ? 'border-blue-400 text-blue-300'
-                  :                                       'border-red-400 text-red-300'
-                }`}>{curDateKey}</span>
-                <input type="date" value={curDateKey}
-                  onChange={e=>{ if(e.target.value) setActiveDate(new Date(e.target.value+'T00:00:00')); }}
-                  className="absolute inset-0 opacity-0 cursor-pointer w-full"
-                  title="點選直接選擇日期"/>
-              </div>
+              <span className={`border-b-2 px-3 py-0.5 text-sm font-bold ${
+                isToday                                ? 'border-white/40'
+                : curDateKey > toDateKey(new Date())  ? 'border-blue-400 text-blue-300'
+                :                                       'border-red-400 text-red-300'
+              }`}>{curDateKey}</span>
               <button onClick={()=>setActiveDate(d=>addDays(d,1))} className="hover:text-white hover:scale-125 transition-transform p-1"><ChevronRight className="w-5 h-5"/></button>
             </div>
           </div>
