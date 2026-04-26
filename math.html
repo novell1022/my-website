@@ -182,7 +182,17 @@ async function callGemini(systemPrompt, userMessage, maxTokens = 1500) {
   });
   if (!res.ok) {
     const t = await res.text();
-    throw new Error(`Gemini API 錯誤 ${res.status}: ${t.slice(0, 200)}`);
+    let msg = `Gemini API 錯誤 ${res.status}`;
+    if (res.status === 403 && t.includes("referer")) {
+      msg = "❌ 403 來源限制錯誤：請到 Google Cloud Console → 憑證 → 編輯 API Key → 將「應用程式限制」改為「無」，或改用指令 python -m http.server 8080 開啟此頁面";
+    } else if (res.status === 429) {
+      msg = "❌ 429 請求超限：請稍等 1 分鐘後再試";
+    } else if (res.status === 404) {
+      msg = "❌ 404 模型不存在：請確認 API Key 是否正確";
+    } else {
+      msg += ": " + t.slice(0, 200);
+    }
+    throw new Error(msg);
   }
   const data = await res.json();
   return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
