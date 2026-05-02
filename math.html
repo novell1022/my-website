@@ -130,6 +130,78 @@ hint 撰寫原則（同樣使用基準量與比較量概念）：
   ③說明積木代表什麼：積木數 = 媽媽現齡 - N×兒子現齡（已知的固定差距）
   ④引導學生：「把這些積木平均分成(N-1)格，每格是幾個，就是幾年後兒子的年齡，再減去現在的年齡就是答案」
 
+▌⑨⑩⑪⑫ 百分率類題型總則
+【核心設計原則：積木全部同色，學生自己決定怎麼分】
+積木代表「百分比單位（%）」，不代表實際數量。
+學生透過分配積木找出各部分的%，這個「分配動作」本身就是學習核心——弄清楚哪個是100%、哪部分是幾%。
+解題流程：分好積木後，用「已知數量 ÷ 對應格的積木數 = 每個積木代表的實際量」，再乘以目標格的積木數得答案。
+
+設計鐵律：
+- blockGroups 只能有一組，且只有一種顏色（不可預先染色暗示答案）
+- label 絕對不能寫出具體數字（不能寫「245顆」「2000元」）
+- hint 說明每格代表什麼%，但不說具體應放幾個
+
+▌⑨ 已知剩餘量求原始量（例：損失2%還剩245顆，原來幾顆）
+計算：剩下=98%，原來=245÷98×100=250顆
+blockGroups：blue=100（代表原來的100%）→ 只有一組，全部同色
+dropZones：剩下的（%）、損失的（%）→ expected 98+2=100 ✓
+hint：「100個積木代表原來的全部（100%）。損失了2%，所以『損失的』格放幾個？剩下的格放幾個？分好後，245顆對應的是哪格？用245除以那格的積木數，得到每個積木代表幾顆，再乘以100就是原來有幾顆」
+
+▌⑩ 已知含加成售價求成本（例：成本加三成定價2600元，成本多少）
+計算：定價=130%，成本=2600÷130×100=2000元
+blockGroups：blue=130（代表定價的130%）→ 只有一組，全部同色
+dropZones：成本（%）、加三成（%）→ expected 100+30=130 ✓
+hint：「130個積木代表定價2600元（成本是100%，加三成是30%，合計130%）。成本格放幾個？加三成格放幾個？分好後，用2600除以積木總數130，算出每個積木代表幾元，再乘以成本那格的積木數」
+
+▌⑪ 已知折扣差額求折扣後價格（例：48折折扣差715元，折後多少）
+計算：折扣掉=52%，每1%=715÷52=13.75元，折後=48×13.75=660元
+blockGroups：blue=100（代表原價的100%）→ 只有一組，全部同色
+dropZones：折扣後的價格（%）、折扣掉的金額（%）→ expected 48+52=100 ✓
+hint：「100個積木代表原價（100%）。48折表示折扣後是48%，折掉了幾%？把積木分到兩格。分好後，715元對應的是哪格？用715除以那格的積木數，算出每個積木代表幾元，再乘以折後那格的積木數就是答案」
+
+▌⑫ 已知折扣後價格求原價（例：八折後賣240元，原價多少）
+計算：折後=80%，原價=240÷80×100=300元
+blockGroups：blue=100（代表原價的100%）→ 只有一組，全部同色
+dropZones：折後的（%）、折掉的（%）→ expected 80+20=100 ✓
+hint：「100個積木代表原價（100%）。打八折就是80%，折掉了幾%？把積木分到兩格。分好後，240元對應的是哪格？用240除以那格的積木數，算出每個積木代表幾元，再乘以100就是原價」
+
+▌⑫ 假設法題—雞兔同籠（例：12個便當共1040元，排骨80鮭魚100，各幾個）
+計算：假設全排骨=12×80=960，差額=1040-960=80，每換一個差=100-80=20，鮭魚=80÷20=4，排骨=8
+⚠️【單色積木】全部同色代表總數量，學生自己嘗試分配，不可用顏色預先暗示答案
+blockGroups：blue=12（全部便當）→ 總和12
+dropZones：排骨便當幾個、鮭魚便當幾個 → expected 8+4=12 ✓
+hint：「先試試看！把12個積木分到兩格，分好後自己算：排骨數×80 + 鮭魚數×100，看看等不等於1040元？不對就調整，直到總價剛好對上」
+
+▌⑭ 倍數比值分配題（例：毛筆和墨汁共180元，墨汁是毛筆的0.2倍）
+⚠️【單色積木，學生自己決定怎麼分】
+計算步驟：
+  1. 將倍數轉換為最簡整數比：0.2倍 = 1/5，所以毛筆:墨汁 = 5:1
+  2. 總份數 = 5+1 = 6，積木總數 = 6（同色）
+  3. 學生把6個積木分成毛筆（5個）和墨汁（1個）
+  4. 每個積木 = 180÷6 = 30元，毛筆=150元，墨汁=30元
+blockGroups：blue=6（代表總共6份）→ 只有一組，全部同色
+dropZones：毛筆（份）、墨汁（份）→ expected 5+1=6 ✓
+hint：「墨汁是毛筆的0.2倍，也就是1/5。如果毛筆是5份，墨汁是幾份？兩個加起來共幾份？把積木分到兩格，分好後用180除以總份數，就知道每份是幾元，再各自乘以份數就是答案」
+
+通用公式（其他倍數比值題同理）：
+  - A是B的N倍 → A:B = N:1 → 積木總數 = N+1
+  - A是B的M/N倍 → A:B = M:N → 積木總數 = M+N（化簡後）
+  - 三個以上的物品同理，把倍數全部化為整數比後求總份數
+
+▌⑮ 已知倍數差值求各量（例：哥哥比承恩多100元，哥哥是承恩5倍，各幾元？）
+計算：差 = 承恩×(5-1) = 4×承恩 = 100，承恩 = 25元，哥哥 = 125元
+⚠️ 積木代表「哥哥的5份」，學生自己切分成「承恩的份」和「哥哥多的份」
+blockGroups：blue=5（代表哥哥的5份）→ 只有一組，全部同色
+dropZones：承恩（份數）、哥哥比承恩多（份數）→ expected 1+4=5 ✓
+hint：「哥哥是承恩的5倍，代表哥哥有5份，承恩有1份，哥哥比承恩多4份。把5個積木分到兩格：承恩1格、哥哥多出的4格。分好後，用100元除以『哥哥比承恩多』那格的積木數，算出每份幾元，就能算出承恩有多少元」
+
+▌速率類題型（平均速率、相遇、追趕、流水）
+⚠️ 此類題型的解題關鍵是「速率×時間=距離」的關係，而非數量的分配。
+積木無法有意義地表達速率、時間、距離之間的動態關係，強行設計反而會誤導學生。
+若輸入此類題目，請在 thinking 中說明「速率類題型不適合積木視覺化」，
+並輸出：blockGroups=[]，dropZones=[]，checkAnswers=[]，
+hint 改為完整的解題提示文字（說明公式和解題步驟，不使用積木操作）。
+
 【通用規則】
 - 每種顏色只用一次
 - label 文字必須精確描述該組積木的意義，數字要正確
@@ -199,27 +271,60 @@ async function callGemini(systemPrompt, userMessage, maxTokens = 1500) {
   return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
 }
 
-/* ── 拖曳積木 ── */
-function DragBlock({ block, onDragStart, onDragEnd }) {
+/* ── 拖曳積木（含觸控支援） ── */
+function DragBlock({ block, onDragStart, onDragEnd, onTouchDrop }) {
   const c = COLORS[block.color] || COLORS.blue;
+
+  const handleTouchStart = e => {
+    e.preventDefault();
+    onDragStart(block.id);
+    const touch = e.touches[0];
+    const clone = e.currentTarget.cloneNode(true);
+    clone.id = "__drag_clone__";
+    clone.style.cssText = `position:fixed;width:30px;height:30px;border-radius:5px;background:${c.fill};border:2px solid ${c.border};opacity:0.85;pointer-events:none;z-index:9999;left:${touch.clientX-15}px;top:${touch.clientY-15}px;transition:none;`;
+    document.body.appendChild(clone);
+  };
+
+  const handleTouchMove = e => {
+    e.preventDefault();
+    const touch = e.touches[0];
+    const clone = document.getElementById("__drag_clone__");
+    if (clone) { clone.style.left = (touch.clientX-15)+"px"; clone.style.top = (touch.clientY-15)+"px"; }
+  };
+
+  const handleTouchEnd = e => {
+    e.preventDefault();
+    const clone = document.getElementById("__drag_clone__");
+    if (clone) clone.remove();
+    const touch = e.changedTouches[0];
+    const el = document.elementFromPoint(touch.clientX, touch.clientY);
+    const zone = el && el.closest("[data-zone-id]");
+    if (zone) onTouchDrop(zone.dataset.zoneId);
+    else onDragEnd();
+  };
+
   return (
     <div
       draggable
       onDragStart={e => { e.dataTransfer.effectAllowed = "move"; onDragStart(block.id); }}
       onDragEnd={onDragEnd}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
       title={block.label}
-      style={{ width:26, height:26, borderRadius:5, background:c.fill, border:`1px solid ${c.border}88`, cursor:"grab", flexShrink:0, transition:"transform 0.1s" }}
+      style={{ width:26, height:26, borderRadius:5, background:c.fill, border:`1px solid ${c.border}88`, cursor:"grab", flexShrink:0, transition:"transform 0.1s", touchAction:"none" }}
       onMouseEnter={e => e.currentTarget.style.transform = "translateY(-2px)"}
       onMouseLeave={e => e.currentTarget.style.transform = "translateY(0)"}
     />
   );
 }
 
-function DragZone({ zone, blocks, onDrop, onDragStart, onDragEnd, feedbackStatus }) {
+function DragZone({ zone, blocks, onDrop, onDragStart, onDragEnd, onTouchDrop, feedbackStatus }) {
   const [over, setOver] = useState(false);
   const borderColor = feedbackStatus==="correct" ? "#3B6D11" : feedbackStatus==="wrong" ? "#A32D2D" : over ? "#378ADD" : "#e2e8f0";
   return (
     <div
+      data-zone-id={zone.id}
       onDragOver={e => { e.preventDefault(); setOver(true); }}
       onDragLeave={() => setOver(false)}
       onDrop={e => { e.preventDefault(); setOver(false); onDrop(zone.id); }}
@@ -230,7 +335,7 @@ function DragZone({ zone, blocks, onDrop, onDragStart, onDragEnd, feedbackStatus
         <span style={{ marginLeft:6, fontWeight:400, color:"#94a3b8" }}>（{blocks.length} 個）</span>
       </div>
       <div style={{ display:"flex", flexWrap:"wrap", gap:5, minHeight:28 }}>
-        {blocks.map(b => <DragBlock key={b.id} block={b} onDragStart={onDragStart} onDragEnd={onDragEnd} />)}
+        {blocks.map(b => <DragBlock key={b.id} block={b} onDragStart={onDragStart} onDragEnd={onDragEnd} onTouchDrop={zoneId => { onTouchDrop(zoneId); }} />)}
       </div>
       {feedbackStatus==="correct" && <div style={{ marginTop:8, fontSize:13, color:"#27500A", fontWeight:600 }}>✓ 正確！</div>}
       {feedbackStatus==="wrong"   && <div style={{ marginTop:8, fontSize:13, color:"#791F1F" }}>✗ 數量不對，再試試！</div>}
@@ -291,7 +396,7 @@ function InputZone({ zone, count, total, blockGroups, totalAllocated, onChange, 
 
 /* ── 主元件 ── */
 function App() {
-  const [problem, setProblem]         = useState("飲料店推行集點卡，哥哥收集了32點，給弟弟6點後兩人的點數一樣多，弟弟原來有幾點？");
+  const [problem, setProblem]         = useState("");
   const [loading, setLoading]         = useState(false);
   const [config, setConfig]           = useState(null);
   const [blocks, setBlocks]           = useState([]);
@@ -507,6 +612,7 @@ function App() {
           <div
             onDragOver={e => e.preventDefault()}
             onDrop={e => { e.preventDefault(); handleDrop("pool"); }}
+            data-zone-id="pool"
             style={{ background:"#fafafa", border:"1px solid #e2e8f0", borderRadius:12, padding:"14px 18px", marginBottom:8, minHeight:80 }}
           >
             <div style={{ fontSize:13, color:"#64748b", marginBottom:8 }}>
@@ -525,6 +631,7 @@ function App() {
                 onDrop={handleDrop}
                 onDragStart={setDraggingId}
                 onDragEnd={() => setDraggingId(null)}
+                onTouchDrop={handleDrop}
                 feedbackStatus={feedback[zone.id]}
               />
             ))}

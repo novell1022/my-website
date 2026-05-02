@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>積木解題工具</title>
+  <title>積木解題工具（Gemini 3.1）</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
@@ -29,7 +29,7 @@ const { useState, useCallback } = React;
    ══════════════════════════════════════════ */
 const GAS_PROXY_URL = "https://script.google.com/macros/s/AKfycbygHGu6rbomtssUUW5uqNzNtJv0-WlDZJrPGge4WLOBgRHLh3GXf8hSDucP7gAHI0te/exec";
 const ACCESS_TOKEN  = "math";
-const GEMINI_MODEL  = "gemini-2.5-flash-lite";  // 可改為 gemini-2.5-flash
+const GEMINI_MODEL  = "gemini-3.1-flash-lite-preview";  // Gemini 3.1 Flash-Lite 預覽版
 
 /* ══════════════════════════════════════════════════════════ */
 
@@ -240,35 +240,56 @@ const EXPL_PROMPT = `你是台灣國小數學老師，用繁體中文說明解�
 ▌年齡和問題（幾年後年齡和為多少）
    說明「每過1年兩人年齡和增加2歲」，求還差幾歲→÷2求年數`;
 
-/* ── GAS Proxy 呼叫 ── */
+/* ── GAS Proxy 呼叫（含自動重試） ── */
 async function callGemini(systemPrompt, userMessage, maxTokens = 1500) {
   if (!GAS_PROXY_URL || GAS_PROXY_URL.startsWith("請填入")) {
     throw new Error("請先在 HTML 檔案頂端填入 GAS Proxy 網址與通關密語");
   }
-  const res = await fetch(GAS_PROXY_URL, {
-    method: "POST",
-    redirect: "follow",
-    headers: { "Content-Type": "text/plain;charset=utf-8" },
-    body: JSON.stringify({
-      token: ACCESS_TOKEN,
-      model: GEMINI_MODEL,
-      payload: {
-        system_instruction: { parts: [{ text: systemPrompt }] },
-        contents: [{ parts: [{ text: userMessage }] }],
-        generationConfig: { maxOutputTokens: maxTokens, temperature: 0.2 },
+
+  const MAX_RETRIES = 3;
+  const RETRY_DELAY = [3000, 6000, 10000]; // 每次重試等待秒數
+
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    if (attempt > 0) {
+      await new Promise(r => setTimeout(r, RETRY_DELAY[attempt - 1]));
+    }
+    try {
+      const res = await fetch(GAS_PROXY_URL, {
+        method: "POST",
+        redirect: "follow",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({
+          token: ACCESS_TOKEN,
+          model: GEMINI_MODEL,
+          payload: {
+            system_instruction: { parts: [{ text: systemPrompt }] },
+            contents: [{ parts: [{ text: userMessage }] }],
+            generationConfig: { maxOutputTokens: maxTokens, temperature: 0.2 },
+          }
+        }),
+      });
+      if (!res.ok) throw new Error("GAS 回應錯誤：HTTP " + res.status);
+      const data = await res.json();
+      if (data.error) {
+        const code = data.error.code;
+        const msg  = data.error.message || "未知錯誤";
+        // 流量過載（503）或超限（429）→ 可重試
+        if ((code === 503 || code === 429 || msg.includes("high demand") || msg.includes("overloaded"))
+            && attempt < MAX_RETRIES - 1) {
+          continue; // 進入下一次重試
+        }
+        if (code === 403) throw new Error("❌ 通關密語不符，請確認 ACCESS_TOKEN 設定正確");
+        if (code === 429) throw new Error("❌ 請求次數超限，請稍等 1 分鐘後再試");
+        throw new Error("❌ " + msg);
       }
-    }),
-  });
-  if (!res.ok) throw new Error("GAS 回應錯誤：HTTP " + res.status);
-  const data = await res.json();
-  if (data.error) {
-    let msg = data.error.message || "未知錯誤";
-    if (data.error.code === 403) msg = "❌ 通關密語不符，請確認 ACCESS_TOKEN 設定正確";
-    if (data.error.code === 429) msg = "❌ 請求次數超限，請稍等 1 分鐘後再試";
-    if (data.error.code === 500) msg = "❌ GAS 伺服器錯誤：" + msg;
-    throw new Error(msg);
+      return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    } catch(e) {
+      // 最後一次仍失敗才拋出
+      if (attempt === MAX_RETRIES - 1) throw e;
+      // 網路錯誤也重試
+      if (e.message.includes("通關") || e.message.includes("超限")) throw e;
+    }
   }
-  return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
 }
 
 /* ── 拖曳積木（含觸控支援） ── */

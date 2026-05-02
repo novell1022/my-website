@@ -239,6 +239,7 @@
     .card-class   { --card-color: var(--blue);   }
     .card-math    { --card-color: var(--green);  }
     .card-mathl   { --card-color: var(--purple); }
+    .card-math3l  { --card-color: #b07d2a;       }
     .card-team    { --card-color: var(--red);    }
 
     /* ── 小標記 (tag) ── */
@@ -257,6 +258,7 @@
     .tag-gemini  { color: var(--green);  border-color: var(--green);  background: #e8f4ee; }
     .tag-free    { color: var(--purple); border-color: var(--purple); background: #f0e8f8; }
     .tag-local   { color: var(--red);    border-color: var(--red);    background: #f8e8e8; }
+    .tag-new     { color: #b07d2a;        border-color: #b07d2a;        background: #fdf0d8; }
 
     /* ── 頁尾 ── */
     footer {
@@ -301,6 +303,7 @@
     .card:nth-child(2) { animation: fadeUp 0.5s ease 0.22s both; }
     .card:nth-child(3) { animation: fadeUp 0.5s ease 0.29s both; }
     .card:nth-child(4) { animation: fadeUp 0.5s ease 0.36s both; }
+    .card:nth-child(5) { animation: fadeUp 0.5s ease 0.43s both; }
   </style>
 </head>
 <body>
@@ -319,7 +322,7 @@
   <div class="section-label">班級管理</div>
   <div class="cards">
 
-    <a href="https://novell1022.github.io/my-website/index.html" class="card card-class">
+    <a href="index.html" class="card card-class">
       <span class="card-badge">Firebase · Cloud</span>
       <span class="card-icon">🖊️</span>
       <div class="card-title">班級自治小黑板</div>
@@ -337,7 +340,7 @@
       </div>
     </a>
 
-    <a href="https://novell1022.github.io/my-website/team_v2.html" class="card card-team">
+    <a href="team_v2.html" class="card card-team">
       <span class="card-badge">Local · No API</span>
       <span class="card-icon">🍋</span>
       <div class="card-title">班級隨機分組小幫手</div>
@@ -360,7 +363,7 @@
   <div class="section-label">數學教具</div>
   <div class="cards">
 
-    <a href="https://novell1022.github.io/my-website/math.html" class="card card-math">
+    <a href="math.html" class="card card-math">
       <span class="card-badge">Gemini 2.5 Flash</span>
       <span class="card-icon">🧱</span>
       <div class="card-title">積木解題工具<br><small style="font-size:0.75rem;font-weight:400;color:#7a6e64;">標準版</small></div>
@@ -379,7 +382,7 @@
       </div>
     </a>
 
-    <a href="https://novell1022.github.io/my-website/mathl.html" class="card card-mathl">
+    <a href="mathl.html" class="card card-mathl">
       <span class="card-badge">Gemini 2.5 Flash‑Lite</span>
       <span class="card-icon">🧱</span>
       <div class="card-title">積木解題工具<br><small style="font-size:0.75rem;font-weight:400;color:#7a6e64;">高配額版</small></div>
@@ -394,6 +397,24 @@
       </div>
       <div class="card-footer">
         <span class="card-file">mathl.html</span>
+        <span class="card-arrow">↗</span>
+      </div>
+    </a>
+
+    <a href="math3l.html" class="card card-math3l">
+      <span class="card-badge">Gemini 3.1 Flash‑Lite Preview</span>
+      <span class="card-icon">🧱</span>
+      <div class="card-title">積木解題工具<br><small style="font-size:0.75rem;font-weight:400;color:#7a6e64;">Gemini 3.1 版</small></div>
+      <div class="card-desc">
+        功能與前兩版完全相同，採用最新的 Gemini 3.1 Flash‑Lite Preview 模型。
+        速度比 2.5 Flash 快 2.5 倍，推理能力更強，適合作為教學對照組或測試用途。
+      </div>
+      <div>
+        <span class="tag tag-new">3.1 Preview</span>
+        <span class="tag tag-new">每日 1,000 次</span>
+      </div>
+      <div class="card-footer">
+        <span class="card-file">math3l.html</span>
         <span class="card-arrow">↗</span>
       </div>
     </a>
