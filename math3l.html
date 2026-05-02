@@ -44,7 +44,7 @@ const COLORS = {
   red:    { fill:"#E24B4A", bg:"#FCEBEB", border:"#A32D2D", text:"#791F1F" },
 };
 
-const DRAG_THRESHOLD = 50;
+/* DRAG_THRESHOLD 已移除，改由學生手動選擇模式 */
 
 const SYSTEM_PROMPT = `你是國小數學教具設計師。根據學生的數學文字題，設計積木配置幫助視覺化解題。
 
@@ -117,18 +117,21 @@ blockGroups：blue=30（還需增加的總歲數）→ 總和30
 dropZones：哥哥增加、弟弟增加 → expected 15+15=30 ✓
 hint：「兩人每過1年，年齡和增加2歲。現在和是20，離50還差幾歲？把這些積木平均分給兩人，每人增加的歲數就是幾年後」
 
-▌⑧年齡倍數變化題（例：媽媽39歲兒子6歲，幾年後媽媽是兒子4倍）
-⚠️ 先驗證：目前倍數=39÷6≈6.5，要求N=4 < 6.5，所以「幾年後」有解 ✓
-   若 N > 目前倍數，則題目無解，應在 thinking 中說明並拒絕輸出錯誤 JSON
-計算：積木數量 = 媽媽現齡 - N×兒子現齡 = 39 - 4×6 = 15
-      dropZone 格數 = N-1 = 3，每格 = 15÷3 = 5，即 n=5 年後
-blockGroups：blue=15（媽媽現齡 減去 N倍兒子現齡）→ 總和15
-dropZones：(N-1) 個格子，各代表「兒子年齡的1格」→ 每格 expected=5，總和=15 ✓
-hint 撰寫原則（同樣使用基準量與比較量概念）：
-  ①說明年齡差固定：「媽媽比兒子大X歲，永遠不會改變」
-  ②套用倍數公式：「當媽媽是兒子的N倍，2人的年齡差 = 兒子的年齡 × (N-1)」
-  ③說明積木代表什麼：積木數 = 媽媽現齡 - N×兒子現齡（已知的固定差距）
-  ④引導學生：「把這些積木平均分成(N-1)格，每格是幾個，就是幾年後兒子的年齡，再減去現在的年齡就是答案」
+▌⑧年齡倍數變化題（例：爺爺68歲柏宇8歲，幾年後爺爺是柏宇6倍）
+⚠️ 年齡差固定不變。積木總數 = 年齡差，dropZone 格數 = 倍數-1（與⑥完全相同）
+先驗證：目前倍數=68÷8=8.5，要求N=6 < 8.5，所以「幾年後」有解 ✓
+   若 N ≥ 目前倍數（大年齡÷小年齡），則無解，應在 thinking 說明
+計算：年齡差 = 68-8 = 60（永遠不變），倍數-1 = 5，柏宇未來年齡 = 60÷5 = 12，即 12-8 = 4 年後
+blockGroups：blue=60（兩人年齡差）→ 總和60
+dropZones：(N-1)=5 個格子，label 用「柏宇的年齡（第1格）」…「柏宇的年齡（第5格）」→ 每格 expected=12，總和=60 ✓
+hint 撰寫原則（使用基準量與比較量概念）：
+  ①說明年齡差固定：「爺爺比柏宇大60歲，不管過幾年都不會改變」
+  ②套用倍數公式：「當爺爺年齡是柏宇的6倍，2人的年齡差 = 柏宇的年齡 × (6-1)」
+  ③說明積木代表什麼：「這60個積木就是他們永遠不變的年齡差」
+  ④引導學生：「把60個積木平均分成5格，每格幾個就是幾年後柏宇的年齡，再減掉現在的年齡就是答案」
+  ⑤不要直接說出答案數字，用問句引導
+格式範例C（⑧年齡倍數變化題）：
+{"thinking":"1.題型：年齡倍數變化題 2.年齡差=68-8=60（固定不變）3.柏宇=基準量，爺爺=比較量=柏宇×6，年齡差=柏宇×(6-1)=柏宇×5 4.柏宇×5=60，柏宇未來=12，再過12-8=4年 5.blockGroups總和=60，expected總和=12×5=60 ✓","blockGroups":[{"color":"blue","count":60,"label":"爺爺和柏宇永遠相差60歲"}],"dropZones":[{"id":"p1","label":"柏宇的年齡（第1格）"},{"id":"p2","label":"柏宇的年齡（第2格）"},{"id":"p3","label":"柏宇的年齡（第3格）"},{"id":"p4","label":"柏宇的年齡（第4格）"},{"id":"p5","label":"柏宇的年齡（第5格）"}],"hint":"爺爺比柏宇大60歲，不管過幾年都不會改變（年齡差不變）。當爺爺是柏宇的6倍，2人的年齡差 = 柏宇的年齡 × (6-1)。把60個積木平均分成5格，每格幾個就是幾年後柏宇的年齡，再減掉現在8歲，就是幾年後的答案","checkAnswers":[{"zoneId":"p1","label":"第1格","expected":12},{"zoneId":"p2","label":"第2格","expected":12},{"zoneId":"p3","label":"第3格","expected":12},{"zoneId":"p4","label":"第4格","expected":12},{"zoneId":"p5","label":"第5格","expected":12}]}
 
 ▌⑨⑩⑪⑫ 百分率類題型總則
 【核心設計原則：積木全部同色，學生自己決定怎麼分】
@@ -417,7 +420,7 @@ function InputZone({ zone, count, total, blockGroups, totalAllocated, onChange, 
 
 /* ── 主元件 ── */
 function App() {
-  const [problem, setProblem]         = useState("");
+  const [problem, setProblem]         = useState("飲料店推行集點卡，哥哥收集了32點，給弟弟6點後兩人的點數一樣多，弟弟原來有幾點？");
   const [loading, setLoading]         = useState(false);
   const [config, setConfig]           = useState(null);
   const [blocks, setBlocks]           = useState([]);
@@ -432,8 +435,10 @@ function App() {
   const [explanation, setExplanation] = useState("");
   const [loadingExpl, setLoadingExpl] = useState(false);
 
+  const [modeChoice, setModeChoice]   = useState(null); // "drag" | "input"
+
   const total = config ? config.blockGroups.reduce((s,g) => s+g.count, 0) : 0;
-  const isDragMode = total <= DRAG_THRESHOLD;
+  const isDragMode = modeChoice === "drag";
   const totalAllocated = Object.values(zoneCounts).reduce((s,v) => s+v, 0);
 
   const generate = async () => {
@@ -442,12 +447,20 @@ function App() {
     setConfig(null); setBlocks([]); setZoneCounts({});
     setFeedback({}); setAllCorrect(false); setError("");
     setThinking(""); setShowThinking(false); setInvalidProblem(""); setExplanation("");
+    setModeChoice(null);
 
     try {
       const raw = await callGemini(SYSTEM_PROMPT, problem);
-      const match = raw.match(/\{[\s\S]*\}/);
-      if (!match) throw new Error("回應中找不到 JSON，原始回應：" + raw.slice(0, 100));
-      const cfg = JSON.parse(match[0]);
+      // 剝除 markdown fence（```json … ``` 或 ``` … ```）
+      const stripped = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
+      const match = stripped.match(/\{[\s\S]*\}/);
+      if (!match) throw new Error("回應中找不到 JSON，原始回應：" + raw.slice(0, 150));
+      // 清理 JSON 字串值中的裸控制字元，避免 JSON.parse 報錯
+      const safeJson = match[0].replace(/("(?:[^"\\]|\\.)*")/g, m =>
+        m.replace(/\n/g, "\\n").replace(/\r/g, "\\r").replace(/\t/g, "\\t")
+          .replace(/[\x00-\x1f]/g, ch => "\\u" + ch.charCodeAt(0).toString(16).padStart(4,"0"))
+      );
+      const cfg = JSON.parse(safeJson);
       if (!cfg.blockGroups || !cfg.dropZones || !cfg.checkAnswers) throw new Error("JSON 欄位不完整");
 
       if (cfg.thinking) {
@@ -470,20 +483,18 @@ function App() {
       }
 
       setConfig(cfg);
-      const t = cfg.blockGroups.reduce((s,g) => s+g.count, 0);
 
-      if (t <= DRAG_THRESHOLD) {
-        let id = 0; const nb = [];
-        for (const g of cfg.blockGroups) {
-          const color = COLORS[g.color] ? g.color : Object.keys(COLORS)[id % 8];
-          for (let i = 0; i < g.count; i++) nb.push({id: id++, color, label: g.label, zone: "pool"});
-        }
-        setBlocks(nb);
-      } else {
-        const init = {};
-        for (const z of cfg.dropZones) init[z.id] = 0;
-        setZoneCounts(init);
+      // 永遠同時準備拖曳用的 blocks 和輸入用的 zoneCounts
+      let id = 0; const nb = [];
+      for (const g of cfg.blockGroups) {
+        const color = COLORS[g.color] ? g.color : Object.keys(COLORS)[id % 8];
+        for (let i = 0; i < g.count; i++) nb.push({id: id++, color, label: g.label, zone: "pool"});
       }
+      setBlocks(nb);
+      const init = {};
+      for (const z of cfg.dropZones) init[z.id] = 0;
+      setZoneCounts(init);
+      setModeChoice(null); // 讓學生選擇模式
     } catch(e) { setError("生成失敗：" + e.message); }
     setLoading(false);
   };
@@ -501,8 +512,13 @@ function App() {
   };
 
   const reset = () => {
-    if (isDragMode) setBlocks(prev => prev.map(b => ({...b, zone:"pool"})));
-    else { const init = {}; for (const z of config.dropZones) init[z.id] = 0; setZoneCounts(init); }
+    setBlocks(prev => prev.map(b => ({...b, zone:"pool"})));
+    const init = {}; for (const z of config.dropZones) init[z.id] = 0; setZoneCounts(init);
+    setFeedback({}); setAllCorrect(false);
+  };
+
+  const switchMode = (mode) => {
+    setModeChoice(mode);
     setFeedback({}); setAllCorrect(false);
   };
 
@@ -566,10 +582,17 @@ function App() {
               重置
             </button>
           )}
-          {config && (
-            <span style={{ fontSize:12, color:"#94a3b8" }}>
-              {isDragMode ? `🖱 拖曳模式（共 ${total} 個）` : `⌨ 輸入模式（共 ${total} 個）`}
-            </span>
+          {config && modeChoice && (
+            <div style={{ display:"flex", gap:4, alignItems:"center", background:"#f1f5f9", borderRadius:8, padding:"3px" }}>
+              <button onClick={() => switchMode("drag")}
+                style={{ padding:"5px 12px", background:isDragMode?"#378ADD":"transparent", color:isDragMode?"#fff":"#64748b", border:"none", borderRadius:6, fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"inherit", transition:"all 0.15s" }}>
+                🖱 拖曳
+              </button>
+              <button onClick={() => switchMode("input")}
+                style={{ padding:"5px 12px", background:!isDragMode?"#378ADD":"transparent", color:!isDragMode?"#fff":"#64748b", border:"none", borderRadius:6, fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"inherit", transition:"all 0.15s" }}>
+                ⌨ 輸入
+              </button>
+            </div>
           )}
         </div>
         {error && (
@@ -628,8 +651,25 @@ function App() {
           </div>
         </div>
 
+        {/* 模式選擇（只在剛產生積木時顯示） */}
+        {!modeChoice && (
+          <div style={{...card, marginBottom:14, textAlign:"center"}}>
+            <div style={{ fontSize:14, color:"#475569", marginBottom:12, fontWeight:600 }}>請選擇作答方式</div>
+            <div style={{ display:"flex", gap:12, justifyContent:"center", flexWrap:"wrap" }}>
+              <button onClick={() => switchMode("drag")}
+                style={{ padding:"14px 28px", background:"#378ADD", color:"#fff", border:"none", borderRadius:10, fontSize:15, fontWeight:700, cursor:"pointer", fontFamily:"inherit", lineHeight:1.5 }}>
+                🖱 拖曳積木<br/><span style={{ fontSize:12, fontWeight:400, opacity:0.85 }}>用手指或滑鼠移動積木</span>
+              </button>
+              <button onClick={() => switchMode("input")}
+                style={{ padding:"14px 28px", background:"#639922", color:"#fff", border:"none", borderRadius:10, fontSize:15, fontWeight:700, cursor:"pointer", fontFamily:"inherit", lineHeight:1.5 }}>
+                ⌨ 輸入數字<br/><span style={{ fontSize:12, fontWeight:400, opacity:0.85 }}>用按鈕或鍵盤填入數量</span>
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* 拖曳模式 */}
-        {isDragMode && (<>
+        {modeChoice === "drag" && (<>
           <div
             onDragOver={e => e.preventDefault()}
             onDrop={e => { e.preventDefault(); handleDrop("pool"); }}
@@ -660,7 +700,7 @@ function App() {
         </>)}
 
         {/* 輸入模式 */}
-        {!isDragMode && (<>
+        {modeChoice === "input" && (<>
           <div style={{...card, marginBottom:14}}>
             <div style={{ display:"flex", justifyContent:"space-between", fontSize:13, color:"#64748b", marginBottom:8 }}>
               <span>總計分配進度</span>
@@ -693,10 +733,10 @@ function App() {
         </>)}
 
         {/* 檢查答案 */}
-        <button onClick={check}
+        {modeChoice && <button onClick={check}
           style={{ padding:"9px 22px", background:"#639922", color:"#fff", border:"none", borderRadius:8, fontSize:14, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}>
           檢查答案
-        </button>
+        </button>}
 
         {/* 答對區塊 */}
         {allCorrect && (
