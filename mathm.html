@@ -301,11 +301,9 @@ async function callGemini(systemPrompt, userMessage, maxTokens = 1500) {
 }
 
 /* ── 拖曳積木（含觸控支援） ── */
-function DragBlock({ block, onDragStart, onDragEnd, onTouchDrop }) {
+function DragBlock({ block, onDragStart, onDragEnd, onTouchDrop, isDragging }) {
   const c = COLORS[block.color] || COLORS.blue;
   const ref = React.useRef(null);
-  // 把 callback 存進 ref，讓 useEffect 不需要把它們列為依賴
-  // 這樣即使父元件重新渲染，touchmove / touchend 也不會被移除重掛
   const cbRef = React.useRef({});
   cbRef.current = { onDragStart, onDragEnd, onTouchDrop };
 
@@ -321,15 +319,15 @@ function DragBlock({ block, onDragStart, onDragEnd, onTouchDrop }) {
       if (clone) clone.remove();
       clone = document.createElement("div");
       clone.id = "__drag_clone__";
-      // transform:translate(-50%,-50%) 讓積木中心貼合手指，不會偏移
-      clone.style.cssText = `position:fixed;width:28px;height:28px;border-radius:5px;background:${c.fill};border:2px solid ${c.border};opacity:0.9;pointer-events:none;z-index:9999;transform:translate(-50%,-50%);left:${t.clientX}px;top:${t.clientY}px;`;
+      // 顯示在手指上方 40px，避免被手指遮住
+      clone.style.cssText = `position:fixed;width:28px;height:28px;border-radius:5px;background:${c.fill};border:2px solid ${c.border};opacity:0.9;pointer-events:none;z-index:9999;transform:translate(-50%,-50%);left:${t.clientX}px;top:${t.clientY - 40}px;`;
       document.body.appendChild(clone);
     };
     const onTM = e => {
-      e.preventDefault(); // passive:false 才真的能阻止捲動
+      e.preventDefault();
       const t = e.touches[0];
       const clone = document.getElementById("__drag_clone__");
-      if (clone) { clone.style.left = t.clientX+"px"; clone.style.top = t.clientY+"px"; }
+      if (clone) { clone.style.left = t.clientX+"px"; clone.style.top = (t.clientY - 40)+"px"; }
     };
     const onTE = e => {
       e.preventDefault();
@@ -338,7 +336,7 @@ function DragBlock({ block, onDragStart, onDragEnd, onTouchDrop }) {
       const t = e.changedTouches[0];
       const target = document.elementFromPoint(t.clientX, t.clientY);
       const zone = target && target.closest("[data-zone-id]");
-      if (zone) cbRef.current.onTouchDrop(zone.dataset.zoneId);
+      if (zone && cbRef.current.onTouchDrop) cbRef.current.onTouchDrop(zone.dataset.zoneId);
       else cbRef.current.onDragEnd();
     };
 
@@ -350,7 +348,7 @@ function DragBlock({ block, onDragStart, onDragEnd, onTouchDrop }) {
       el.removeEventListener("touchmove",  onTM);
       el.removeEventListener("touchend",   onTE);
     };
-  }, [block.id, c.fill, c.border]); // ← callbacks 透過 cbRef 取用，不列入依賴
+  }, [block.id, c.fill, c.border]);
 
   return (
     <div
@@ -359,14 +357,16 @@ function DragBlock({ block, onDragStart, onDragEnd, onTouchDrop }) {
       onDragStart={e => { e.dataTransfer.effectAllowed = "move"; onDragStart(block.id); }}
       onDragEnd={onDragEnd}
       title={block.label}
-      style={{ width:26, height:26, borderRadius:5, background:c.fill, border:`1px solid ${c.border}88`, cursor:"grab", flexShrink:0, touchAction:"none" }}
+      style={{ width:26, height:26, borderRadius:5, background:c.fill, border:`1px solid ${c.border}88`,
+        cursor:"grab", flexShrink:0, touchAction:"none",
+        opacity: isDragging ? 0 : 1, transition:"opacity 0.1s" }}
       onMouseEnter={e => e.currentTarget.style.transform = "translateY(-2px)"}
       onMouseLeave={e => e.currentTarget.style.transform = ""}
     />
   );
 }
 
-function DragZone({ zone, blocks, onDrop, onDragStart, onDragEnd, onTouchDrop, feedbackStatus }) {
+function DragZone({ zone, blocks, onDrop, onDragStart, onDragEnd, onTouchDrop, draggingId, feedbackStatus }) {
   const [over, setOver] = useState(false);
   const borderColor = feedbackStatus==="correct" ? "#3B6D11" : feedbackStatus==="wrong" ? "#A32D2D" : over ? "#378ADD" : "#e2e8f0";
   return (
@@ -382,7 +382,10 @@ function DragZone({ zone, blocks, onDrop, onDragStart, onDragEnd, onTouchDrop, f
         <span style={{ marginLeft:6, fontWeight:400, color:"#94a3b8" }}>（{blocks.length} 個）</span>
       </div>
       <div style={{ display:"flex", flexWrap:"wrap", gap:5, minHeight:28 }}>
-        {blocks.map(b => <DragBlock key={b.id} block={b} onDragStart={onDragStart} onDragEnd={onDragEnd} onTouchDrop={zoneId => { onTouchDrop(zoneId); }} />)}
+        {blocks.map(b => <DragBlock key={b.id} block={b}
+          isDragging={draggingId === b.id}
+          onDragStart={onDragStart} onDragEnd={onDragEnd}
+          onTouchDrop={onTouchDrop} />)}
       </div>
       {feedbackStatus==="correct" && <div style={{ marginTop:8, fontSize:13, color:"#27500A", fontWeight:600 }}>✓ 正確！</div>}
       {feedbackStatus==="wrong"   && <div style={{ marginTop:8, fontSize:13, color:"#791F1F" }}>✗ 數量不對，再試試！</div>}
@@ -830,7 +833,11 @@ function App() {
               積木區 <span style={{ color:"#94a3b8" }}>（{poolBlocks.length} 個）</span>
             </div>
             <div style={{ display:"flex", flexWrap:"wrap", gap:5, minHeight:28 }}>
-              {poolBlocks.map(b => <DragBlock key={b.id} block={b} onDragStart={setDraggingId} onDragEnd={() => setDraggingId(null)} />)}
+              {poolBlocks.map(b => <DragBlock key={b.id} block={b}
+                isDragging={draggingId === b.id}
+                onDragStart={setDraggingId}
+                onDragEnd={() => setDraggingId(null)}
+                onTouchDrop={handleDrop} />)}
               {poolBlocks.length === 0 && <span style={{ fontSize:13, color:"#94a3b8", fontStyle:"italic" }}>所有積木已分配完畢</span>}
             </div>
           </div>
@@ -843,6 +850,7 @@ function App() {
                 onDragStart={setDraggingId}
                 onDragEnd={() => setDraggingId(null)}
                 onTouchDrop={handleDrop}
+                draggingId={draggingId}
                 feedbackStatus={feedback[zone.id]}
               />
             ))}
@@ -989,52 +997,35 @@ function App() {
 
               {/* 拖曳模式（第二階段） */}
               {altModeChoice === "drag" && (<>
-                <div style={{...card, marginBottom:14, background:"#fff"}}>
-                  <div style={{ fontSize:13, color:"#64748b", marginBottom:10 }}>積木池（共 {altPoolBlocks.length} 個）</div>
-                  <div style={{ display:"flex", flexWrap:"wrap", gap:6, minHeight:44,
-                    border:"2px dashed #d1d5db", borderRadius:8, padding:10 }}
-                    onDragOver={e => e.preventDefault()}
-                    onDrop={() => handleDrop("pool")}
-                    onTouchMove={e => { e.preventDefault(); const t=e.touches[0]; const el=document.elementFromPoint(t.clientX,t.clientY); const z=el?.closest("[data-zone]")?.dataset.zone; if(z) handleDrop(z); }}
-                  >
-                    {altPoolBlocks.map(b => {
-                      const col = COLORS[b.color] || COLORS.orange;
-                      return (
-                        <div key={b.id} draggable
-                          onDragStart={() => setDraggingId(b.id)}
-                          onTouchStart={() => setDraggingId(b.id)}
-                          style={{ width:28, height:28, borderRadius:5, background:col.fill, border:`2px solid ${col.border}`,
-                            cursor:"grab", boxShadow:draggingId===b.id?"0 0 0 2px #378ADD":"none" }}
-                          title={b.label}
-                        />
-                      );
-                    })}
+                <div
+                  data-zone-id="pool"
+                  onDragOver={e => e.preventDefault()}
+                  onDrop={() => handleDrop("pool")}
+                  style={{ background:"#fafafa", border:"1px solid #e2e8f0", borderRadius:12, padding:"14px 18px", marginBottom:8, minHeight:70 }}
+                >
+                  <div style={{ fontSize:13, color:"#64748b", marginBottom:8 }}>積木區 <span style={{ color:"#94a3b8" }}>（{altPoolBlocks.length} 個）</span></div>
+                  <div style={{ display:"flex", flexWrap:"wrap", gap:5, minHeight:28 }}>
+                    {altPoolBlocks.map(b => <DragBlock key={b.id} block={b}
+                      isDragging={draggingId === b.id}
+                      onDragStart={setDraggingId}
+                      onDragEnd={() => setDraggingId(null)}
+                      onTouchDrop={handleDrop} />)}
+                    {altPoolBlocks.length === 0 && <span style={{ fontSize:13, color:"#94a3b8", fontStyle:"italic" }}>所有積木已分配完畢</span>}
                   </div>
                 </div>
-                <div style={{ display:"flex", flexWrap:"wrap", gap:10, marginBottom:14 }}>
-                  {altConfig.dropZones.map(z => {
-                    const inZone = altBlocks.filter(b => b.zone === z.id);
-                    const fb = altFeedback[z.id];
-                    const zColor = fb==="correct"?"#EAF3DE":fb==="wrong"?"#FDECEA":"#f8fafc";
-                    const zBorder = fb==="correct"?"#97C459":fb==="wrong"?"#E57373":"#e2e8f0";
-                    return (
-                      <div key={z.id} data-zone={z.id}
-                        onDragOver={e => e.preventDefault()} onDrop={() => handleDrop(z.id)}
-                        onTouchMove={e => { e.preventDefault(); const t=e.touches[0]; const el=document.elementFromPoint(t.clientX,t.clientY); const zid=el?.closest("[data-zone]")?.dataset.zone; if(zid) handleDrop(zid); }}
-                        style={{ flex:"1 1 140px", minHeight:80, background:zColor, border:`2px dashed ${zBorder}`,
-                          borderRadius:10, padding:"10px 12px" }}>
-                        <div style={{ fontSize:12, color:"#64748b", marginBottom:6, fontWeight:600 }}>{z.label}</div>
-                        <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
-                          {inZone.map(b => {
-                            const col = COLORS[b.color] || COLORS.orange;
-                            return <div key={b.id} draggable onDragStart={() => setDraggingId(b.id)} onTouchStart={() => setDraggingId(b.id)}
-                              style={{ width:28, height:28, borderRadius:5, background:col.fill, border:`2px solid ${col.border}`, cursor:"grab" }} title={b.label} />;
-                          })}
-                        </div>
-                        {fb && <div style={{ fontSize:11, marginTop:4, color:fb==="correct"?"#27500A":"#B71C1C", fontWeight:700 }}>{fb==="correct"?"✓ 正確":"✗ 再想想"}</div>}
-                      </div>
-                    );
-                  })}
+                <div style={{ fontSize:12, color:"#94a3b8", margin:"4px 4px 10px" }}>↓ 把積木拖曳到下方區域</div>
+                <div style={{ display:"flex", gap:12, marginBottom:16, flexWrap:"wrap" }}>
+                  {altConfig.dropZones.map(zone => (
+                    <DragZone key={zone.id} zone={zone}
+                      blocks={altBlocks.filter(b => b.zone === zone.id)}
+                      onDrop={handleDrop}
+                      onDragStart={setDraggingId}
+                      onDragEnd={() => setDraggingId(null)}
+                      onTouchDrop={handleDrop}
+                      draggingId={draggingId}
+                      feedbackStatus={altFeedback[zone.id]}
+                    />
+                  ))}
                 </div>
               </>)}
 
