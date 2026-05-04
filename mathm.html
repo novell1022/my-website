@@ -304,48 +304,53 @@ async function callGemini(systemPrompt, userMessage, maxTokens = 1500) {
 function DragBlock({ block, onDragStart, onDragEnd, onTouchDrop }) {
   const c = COLORS[block.color] || COLORS.blue;
   const ref = React.useRef(null);
+  // 把 callback 存進 ref，讓 useEffect 不需要把它們列為依賴
+  // 這樣即使父元件重新渲染，touchmove / touchend 也不會被移除重掛
+  const cbRef = React.useRef({});
+  cbRef.current = { onDragStart, onDragEnd, onTouchDrop };
 
   React.useEffect(() => {
     const el = ref.current;
     if (!el) return;
 
-    const onTouchStart = e => {
-      e.preventDefault(); // passive:false 才有效
-      onDragStart(block.id);
-      const touch = e.touches[0];
-      const clone = document.createElement("div");
+    const onTS = e => {
+      e.preventDefault();
+      cbRef.current.onDragStart(block.id);
+      const t = e.touches[0];
+      let clone = document.getElementById("__drag_clone__");
+      if (clone) clone.remove();
+      clone = document.createElement("div");
       clone.id = "__drag_clone__";
-      clone.style.cssText = `position:fixed;width:30px;height:30px;border-radius:5px;background:${c.fill};border:2px solid ${c.border};opacity:0.85;pointer-events:none;z-index:9999;left:${touch.clientX-15}px;top:${touch.clientY-15}px;`;
+      // transform:translate(-50%,-50%) 讓積木中心貼合手指，不會偏移
+      clone.style.cssText = `position:fixed;width:28px;height:28px;border-radius:5px;background:${c.fill};border:2px solid ${c.border};opacity:0.9;pointer-events:none;z-index:9999;transform:translate(-50%,-50%);left:${t.clientX}px;top:${t.clientY}px;`;
       document.body.appendChild(clone);
     };
-
-    const onTouchMove = e => {
-      e.preventDefault(); // 阻止捲動，passive:false 才有效
-      const touch = e.touches[0];
+    const onTM = e => {
+      e.preventDefault(); // passive:false 才真的能阻止捲動
+      const t = e.touches[0];
       const clone = document.getElementById("__drag_clone__");
-      if (clone) { clone.style.left = (touch.clientX-15)+"px"; clone.style.top = (touch.clientY-15)+"px"; }
+      if (clone) { clone.style.left = t.clientX+"px"; clone.style.top = t.clientY+"px"; }
     };
-
-    const onTouchEnd = e => {
+    const onTE = e => {
       e.preventDefault();
       const clone = document.getElementById("__drag_clone__");
       if (clone) clone.remove();
-      const touch = e.changedTouches[0];
-      const el2 = document.elementFromPoint(touch.clientX, touch.clientY);
-      const zone = el2 && el2.closest("[data-zone-id]");
-      if (zone) onTouchDrop(zone.dataset.zoneId);
-      else onDragEnd();
+      const t = e.changedTouches[0];
+      const target = document.elementFromPoint(t.clientX, t.clientY);
+      const zone = target && target.closest("[data-zone-id]");
+      if (zone) cbRef.current.onTouchDrop(zone.dataset.zoneId);
+      else cbRef.current.onDragEnd();
     };
 
-    el.addEventListener("touchstart", onTouchStart, { passive: false });
-    el.addEventListener("touchmove",  onTouchMove,  { passive: false });
-    el.addEventListener("touchend",   onTouchEnd,   { passive: false });
+    el.addEventListener("touchstart", onTS, { passive: false });
+    el.addEventListener("touchmove",  onTM, { passive: false });
+    el.addEventListener("touchend",   onTE, { passive: false });
     return () => {
-      el.removeEventListener("touchstart", onTouchStart);
-      el.removeEventListener("touchmove",  onTouchMove);
-      el.removeEventListener("touchend",   onTouchEnd);
+      el.removeEventListener("touchstart", onTS);
+      el.removeEventListener("touchmove",  onTM);
+      el.removeEventListener("touchend",   onTE);
     };
-  }, [block.id, c.fill, c.border, onDragStart, onDragEnd, onTouchDrop]);
+  }, [block.id, c.fill, c.border]); // ← callbacks 透過 cbRef 取用，不列入依賴
 
   return (
     <div
@@ -356,7 +361,7 @@ function DragBlock({ block, onDragStart, onDragEnd, onTouchDrop }) {
       title={block.label}
       style={{ width:26, height:26, borderRadius:5, background:c.fill, border:`1px solid ${c.border}88`, cursor:"grab", flexShrink:0, touchAction:"none" }}
       onMouseEnter={e => e.currentTarget.style.transform = "translateY(-2px)"}
-      onMouseLeave={e => e.currentTarget.style.transform = "translateY(0)"}
+      onMouseLeave={e => e.currentTarget.style.transform = ""}
     />
   );
 }
