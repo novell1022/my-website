@@ -1,0 +1,1106 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>積木解題工具</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;700;800&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { margin: 0; background: #f8fafc; min-height: 100vh; }
+    input[type=number]::-webkit-inner-spin-button,
+    input[type=number]::-webkit-outer-spin-button { opacity: 1; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useCallback } = React;
+
+/* ══════════════════════════════════════════
+   ★ 設定說明 ★
+   1. 將 GAS Proxy 網址貼到 GAS_PROXY_URL
+   2. 將自訂通關密語貼到 ACCESS_TOKEN
+      （需與 GAS 指令碼屬性中的 ACCESS_TOKEN 一致）
+   ══════════════════════════════════════════ */
+const GAS_PROXY_URL = "https://script.google.com/macros/s/AKfycbygHGu6rbomtssUUW5uqNzNtJv0-WlDZJrPGge4WLOBgRHLh3GXf8hSDucP7gAHI0te/exec";
+const ACCESS_TOKEN  = "math";
+const GEMINI_MODEL  = "gemini-2.5-flash";       // 可改為 gemini-2.5-flash-lite
+
+/* ══════════════════════════════════════════════════════════ */
+
+const COLORS = {
+  blue:   { fill:"#378ADD", bg:"#E6F1FB", border:"#185FA5", text:"#0C447C" },
+  green:  { fill:"#639922", bg:"#EAF3DE", border:"#3B6D11", text:"#27500A" },
+  amber:  { fill:"#BA7517", bg:"#FAEEDA", border:"#854F0B", text:"#633806" },
+  coral:  { fill:"#D85A30", bg:"#FAECE7", border:"#993C1D", text:"#4A1B0C" },
+  purple: { fill:"#7F77DD", bg:"#EEEDFE", border:"#534AB7", text:"#3C3489" },
+  teal:   { fill:"#1D9E75", bg:"#E1F5EE", border:"#0F6E56", text:"#085041" },
+  pink:   { fill:"#D4537E", bg:"#FBEAF0", border:"#993556", text:"#72243E" },
+  red:    { fill:"#E24B4A", bg:"#FCEBEB", border:"#A32D2D", text:"#791F1F" },
+};
+
+/* DRAG_THRESHOLD 已移除，改由學生手動選擇模式 */
+
+const SYSTEM_PROMPT = `你是國小數學教具設計師。根據學生的數學文字題，設計積木配置幫助視覺化解題。
+
+【輸出格式】
+只輸出 JSON，不要有任何其他文字或 markdown。先在 "thinking" 欄位完整寫出計算步驟與驗算，再填其他欄位。
+⚠️ ⑦年齡和目標題因需輸出兩套 config，thinking 欄位請精簡，只寫關鍵算式（不超過80字）。
+
+{
+  "thinking": "1.題型：XXX 2.計算：（逐步列式）3.驗算：blockGroups總和=X，checkAnswers總和=X，相等✓",
+  "blockGroups": [...],
+  "dropZones": [...],
+  "hint": "...",
+  "checkAnswers": [...]
+}
+
+【鐵律：數量一致性】
+blockGroups 所有 count 相加 必須嚴格等於 checkAnswers 所有 expected 相加。
+輸出前逐一計算確認，不相等則重新設計。
+
+【各題型處理方式】
+
+▌①一般和差分配題（例：合唱團48人，女比男多12人）
+計算：差=12，底數=48-12=36，各得18，女=30，男=18
+blockGroups：blue=36（底數），green=12（差值）→ 總和48
+dropZones：男生、女生 → expected 18+30=48 ✓
+
+▌②線段切割題（例：325公分剪2段，相差45公分）
+計算：差=45，底數=325-45=280，各得140，長=185，短=140
+blockGroups：blue=280，green=45 → 總和325
+dropZones：長段、短段 → expected 185+140=325 ✓
+
+▌③周長題（例：繩子50公分圍長方形，長比寬多5公分）
+⚠️ 積木總數=周長÷2（只代表長+寬，不是全部周長）
+計算：長+寬=25，差=5，底數=20，各得10，長=15，寬=10
+blockGroups：blue=20，green=5 → 總和25
+dropZones：長、寬 → expected 15+10=25 ✓
+hint 需說明「積木代表半個周長（長+寬=25）」
+
+▌④移轉題—求移後數量（例：甲42顆乙32顆，移幾顆使兩箱相等）
+⚠️ dropZone 代表移動後的數量
+計算：總=74，平均=37，差=10，需移=5
+blockGroups：blue=64（底數×2），green=10（差值）→ 總和74
+dropZones：甲箱後、乙箱後 → expected 37+37=74 ✓
+hint：「平均分配積木到兩格，就知道移後每箱幾個，再算需移幾個」
+
+▌⑤移轉題—求移前數量（例：哥哥32點給弟弟6點後兩人一樣，弟弟原來幾點）
+計算：哥移後=32-6=26，弟移後也=26，弟原來=26-6=20
+⚠️【單色切分】積木全部同色，代表「弟弟移動後的總點數(26)」
+   學生根據題目已知的移轉量(6點)，自己決定如何切分，剩下的才是答案
+   絕對不可以把答案(20)預先標成某個顏色的積木——那等於直接公布答案
+blockGroups：blue=26（弟弟移動後的點數，即32-6=26）→ 總和26（只有一組）
+dropZones：弟弟原來有幾點、哥哥給弟弟的點數 → expected 20+6=26 ✓
+hint：「哥哥給弟弟6點後，兩人一樣多，各有26點。這26點裡面有一部分是哥哥剛給的，有一部分是弟弟本來就有的。先把哥哥給的6點放到右邊，剩下的就是弟弟原來有幾點」
+
+▌⑥年齡倍數題（例：爸爸31歲女兒3歲，爸爸=女兒3倍時女兒幾歲）
+⚠️ 年齡差固定不變。積木總數=年齡差，dropZone 數量=倍數-1
+計算：年齡差=31-3=28（永遠不變），倍數-1=2，女兒=28÷2=14
+blockGroups：blue=28（兩人年齡差）→ 總和28
+dropZones：(N-1) 個格子，label 用「女兒年齡（第1格）」「女兒年齡（第2格）」→ expected 各14，總和28 ✓
+hint 撰寫原則（依照國小六年級「基準量與比較量」課程概念）：
+  ①說明年齡差固定：「爸爸比女兒大28歲，不管過幾年都不會改變」
+  ②套用學生已知的倍數公式：「當爸爸年齡是女兒的3倍，2人的年齡差 = 女兒的年齡 × (3-1)」
+  ③引導學生自己計算：「所以這時女兒的年齡應該怎麼算？」
+  ④dropZone 的格數對應 (N-1)，每格代表1個「女兒的年齡」，學生把28個積木平分到(N-1)格，就能算出答案
+  ⑤不要直接給出數字答案，用問句引導思考
+
+▌⑦年齡和目標題（例：爸爸39歲兒子7歲，幾年後兩人年齡和為60）
+主解法用「年齡差不變」框架，並在 JSON 最後加上 "hasAlt": true（系統會另行生成第二種方法）。
+
+【主解法 config — 年齡差框架】
+計算：年齡差=39-7=32（固定不變），目標和60-年齡差32=28，平分2格各14，兒子14-7=7年後
+blockGroups：blue=28（目標和扣掉年齡差的剩餘量）→ 總和28
+dropZones：2格「爸爸增加的歲數」「兒子增加的歲數」→ 各 expected=14，總和=28 ✓
+hint：①說明年齡差32固定 ②積木=目標和減年齡差的剩餘 ③平分2格，每格=兒子未來年齡 ④不直接說答案
+
+格式範例D（⑦年齡和目標題）：
+{"thinking":"年齡差=32固定，目標60-32=28平分2格各14，兒子14-7=7年後","blockGroups":[{"color":"blue","count":28,"label":"目標年齡和(60)扣掉年齡差(32)後要平分的28歲"}],"dropZones":[{"id":"dad","label":"爸爸增加的歲數"},{"id":"son","label":"兒子增加的歲數"}],"hint":"爸爸比兒子大32歲，這個差距不管過幾年都不會改變。目標年齡和60歲，先扣掉固定不變的32歲，剩下28歲由兩人平分。把28個積木平均分成2格，每格幾個就是兒子幾年後的年齡，再想想兒子現在7歲，要幾年才到那個數字？","checkAnswers":[{"zoneId":"dad","expected":14},{"zoneId":"son","expected":14}],"hasAlt":true}
+
+▌⑧年齡倍數變化題（例：爺爺68歲柏宇8歲，幾年後爺爺是柏宇6倍）
+⚠️ 年齡差固定不變。積木總數 = 年齡差，dropZone 格數 = 倍數-1（與⑥完全相同）
+先驗證：目前倍數=68÷8=8.5，要求N=6 < 8.5，所以「幾年後」有解 ✓
+   若 N ≥ 目前倍數，則無解，應在 thinking 說明
+計算：年齡差=68-8=60（永遠不變），倍數-1=5，柏宇未來=60÷5=12，即12-8=4年後
+blockGroups：blue=60（兩人年齡差）→ 總和60
+dropZones：(N-1)=5格，label「柏宇的年齡（第1格）」…→ 每格 expected=12，總和=60 ✓
+hint 撰寫原則：
+  ①說明年齡差固定 ②套用倍數公式：年齡差=柏宇×(N-1) ③積木=年齡差 ④引導平分求未來年齡
+格式範例C（⑧年齡倍數變化題）：
+{"thinking":"1.題型：年齡倍數變化題 2.年齡差=60固定 3.柏宇×5=60，柏宇未來=12，4年後 4.總和60=12×5 ✓","blockGroups":[{"color":"blue","count":60,"label":"爺爺和柏宇永遠相差60歲"}],"dropZones":[{"id":"p1","label":"柏宇的年齡（第1格）"},{"id":"p2","label":"柏宇的年齡（第2格）"},{"id":"p3","label":"柏宇的年齡（第3格）"},{"id":"p4","label":"柏宇的年齡（第4格）"},{"id":"p5","label":"柏宇的年齡（第5格）"}],"hint":"爺爺比柏宇大60歲，不管過幾年都不會改變。當爺爺是柏宇的6倍，年齡差=柏宇×(6-1)。把60個積木平均分成5格，每格幾個就是幾年後柏宇的年齡，再減掉現在8歲就是答案","checkAnswers":[{"zoneId":"p1","label":"第1格","expected":12},{"zoneId":"p2","label":"第2格","expected":12},{"zoneId":"p3","label":"第3格","expected":12},{"zoneId":"p4","label":"第4格","expected":12},{"zoneId":"p5","label":"第5格","expected":12}]}
+
+▌⑨⑩⑪⑫ 百分率類題型總則
+【核心設計原則：積木全部同色，學生自己決定怎麼分】
+積木代表「百分比單位（%）」，不代表實際數量。
+學生透過分配積木找出各部分的%，這個「分配動作」本身就是學習核心——弄清楚哪個是100%、哪部分是幾%。
+解題流程：分好積木後，用「已知數量 ÷ 對應格的積木數 = 每個積木代表的實際量」，再乘以目標格的積木數得答案。
+
+設計鐵律：
+- blockGroups 只能有一組，且只有一種顏色（不可預先染色暗示答案）
+- label 絕對不能寫出具體數字（不能寫「245顆」「2000元」）
+- hint 說明每格代表什麼%，但不說具體應放幾個
+
+▌⑨ 已知剩餘量求原始量（例：損失2%還剩245顆，原來幾顆）
+計算：剩下=98%，原來=245÷98×100=250顆
+blockGroups：blue=100（代表原來的100%）→ 只有一組，全部同色
+dropZones：剩下的（%）、損失的（%）→ expected 98+2=100 ✓
+hint：「100個積木代表原來的全部（100%）。損失了2%，所以『損失的』格放幾個？剩下的格放幾個？分好後，245顆對應的是哪格？用245除以那格的積木數，得到每個積木代表幾顆，再乘以100就是原來有幾顆」
+
+▌⑩ 已知含加成售價求成本（例：成本加三成定價2600元，成本多少）
+計算：定價=130%，成本=2600÷130×100=2000元
+blockGroups：blue=130（代表定價的130%）→ 只有一組，全部同色
+dropZones：成本（%）、加三成（%）→ expected 100+30=130 ✓
+hint：「130個積木代表定價2600元（成本是100%，加三成是30%，合計130%）。成本格放幾個？加三成格放幾個？分好後，用2600除以積木總數130，算出每個積木代表幾元，再乘以成本那格的積木數」
+
+▌⑪ 已知折扣差額求折扣後價格（例：48折折扣差715元，折後多少）
+計算：折扣掉=52%，每1%=715÷52=13.75元，折後=48×13.75=660元
+blockGroups：blue=100（代表原價的100%）→ 只有一組，全部同色
+dropZones：折扣後的價格（%）、折扣掉的金額（%）→ expected 48+52=100 ✓
+hint：「100個積木代表原價（100%）。48折表示折扣後是48%，折掉了幾%？把積木分到兩格。分好後，715元對應的是哪格？用715除以那格的積木數，算出每個積木代表幾元，再乘以折後那格的積木數就是答案」
+
+▌⑫ 已知折扣後價格求原價（例：八折後賣240元，原價多少）
+計算：折後=80%，原價=240÷80×100=300元
+blockGroups：blue=100（代表原價的100%）→ 只有一組，全部同色
+dropZones：折後的（%）、折掉的（%）→ expected 80+20=100 ✓
+hint：「100個積木代表原價（100%）。打八折就是80%，折掉了幾%？把積木分到兩格。分好後，240元對應的是哪格？用240除以那格的積木數，算出每個積木代表幾元，再乘以100就是原價」
+
+▌⑫ 假設法題—雞兔同籠（例：12個便當共1040元，排骨80鮭魚100，各幾個）
+計算：假設全排骨=12×80=960，差額=1040-960=80，每換一個差=100-80=20，鮭魚=80÷20=4，排骨=8
+⚠️【單色積木】全部同色代表總數量，學生自己嘗試分配，不可用顏色預先暗示答案
+blockGroups：blue=12（全部便當）→ 總和12
+dropZones：排骨便當幾個、鮭魚便當幾個 → expected 8+4=12 ✓
+hint：「先試試看！把12個積木分到兩格，分好後自己算：排骨數×80 + 鮭魚數×100，看看等不等於1040元？不對就調整，直到總價剛好對上」
+
+▌⑭ 倍數比值分配題（例：毛筆和墨汁共180元，墨汁是毛筆的0.2倍）
+⚠️【單色積木，學生自己決定怎麼分】
+計算步驟：
+  1. 將倍數轉換為最簡整數比：0.2倍 = 1/5，所以毛筆:墨汁 = 5:1
+  2. 總份數 = 5+1 = 6，積木總數 = 6（同色）
+  3. 學生把6個積木分成毛筆（5個）和墨汁（1個）
+  4. 每個積木 = 180÷6 = 30元，毛筆=150元，墨汁=30元
+blockGroups：blue=6（代表總共6份）→ 只有一組，全部同色
+dropZones：毛筆（份）、墨汁（份）→ expected 5+1=6 ✓
+hint：「墨汁是毛筆的0.2倍，也就是1/5。如果毛筆是5份，墨汁是幾份？兩個加起來共幾份？把積木分到兩格，分好後用180除以總份數，就知道每份是幾元，再各自乘以份數就是答案」
+
+通用公式（其他倍數比值題同理）：
+  - A是B的N倍 → A:B = N:1 → 積木總數 = N+1
+  - A是B的M/N倍 → A:B = M:N → 積木總數 = M+N（化簡後）
+  - 三個以上的物品同理，把倍數全部化為整數比後求總份數
+
+▌⑮ 已知倍數差值求各量（例：哥哥比承恩多100元，哥哥是承恩5倍，各幾元？）
+計算：差 = 承恩×(5-1) = 4×承恩 = 100，承恩 = 25元，哥哥 = 125元
+⚠️ 積木代表「哥哥的5份」，學生自己切分成「承恩的份」和「哥哥多的份」
+blockGroups：blue=5（代表哥哥的5份）→ 只有一組，全部同色
+dropZones：承恩（份數）、哥哥比承恩多（份數）→ expected 1+4=5 ✓
+hint：「哥哥是承恩的5倍，代表哥哥有5份，承恩有1份，哥哥比承恩多4份。把5個積木分到兩格：承恩1格、哥哥多出的4格。分好後，用100元除以『哥哥比承恩多』那格的積木數，算出每份幾元，就能算出承恩有多少元」
+
+▌速率類題型（平均速率、相遇、追趕、流水）
+⚠️ 此類題型的解題關鍵是「速率×時間=距離」的關係，而非數量的分配。
+積木無法有意義地表達速率、時間、距離之間的動態關係，強行設計反而會誤導學生。
+若輸入此類題目，請在 thinking 中說明「速率類題型不適合積木視覺化」，
+並輸出：blockGroups=[]，dropZones=[]，checkAnswers=[]，
+hint 改為完整的解題提示文字（說明公式和解題步驟，不使用積木操作）。
+
+【通用規則】
+- 每種顏色只用一次
+- label 文字必須精確描述該組積木的意義，數字要正確
+- hint 引導思考，不直接說出答案數字
+- 若題目數字明顯有誤（如無整數解），在 thinking 中說明，並嘗試用最接近的合理解設計
+
+格式範例A（⑤移轉求移前，集點卡題）：
+{"thinking":"1.題型：移轉求移前 2.哥移後=32-6=26，弟移後=26，弟原來=26-6=20 3.積木=弟移後26點全部同色，學生自己切分，blockGroups總和=26，expected總和=20+6=26 ✓","blockGroups":[{"color":"blue","count":26,"label":"弟弟移動後共有的點數（哥哥給完後）"}],"dropZones":[{"id":"original","label":"弟弟原來有幾點"},{"id":"given","label":"哥哥給弟弟的幾點"}],"hint":"哥哥給弟弟6點後，兩人一樣多，各有26點。這26點裡有一部分是哥哥剛給的，有一部分是弟弟本來就有的。先把哥哥給的6點放到右邊，剩下的就是弟弟原來有幾點","checkAnswers":[{"zoneId":"original","label":"弟弟原來有幾點","expected":20},{"zoneId":"given","label":"哥哥給的幾點","expected":6}]}
+
+格式範例B（⑥年齡倍數題）：
+{"thinking":"1.題型：年齡倍數題 2.年齡差=31-3=28（固定不變）3.女兒=基準量，爸爸=比較量=女兒×3，年齡差=女兒×(3-1)=女兒×2 4.女兒×2=28，女兒=14 5.blockGroups總和=28，expected總和=14+14=28 ✓","blockGroups":[{"color":"blue","count":28,"label":"爸爸和女兒永遠相差28歲"}],"dropZones":[{"id":"part1","label":"女兒的年齡（第1格）"},{"id":"part2","label":"女兒的年齡（第2格）"}],"hint":"爸爸比女兒大28歲，不管過幾年都不會改變（年齡差不變）。當爸爸年齡是女兒的3倍，2人的年齡差 = 女兒的年齡 × (3-1)，所以這時女兒的年齡應該怎麼算？","checkAnswers":[{"zoneId":"part1","label":"第1格","expected":14},{"zoneId":"part2","label":"第2格","expected":14}]}`;
+
+const EXPL_PROMPT = `你是台灣國小數學老師，用繁體中文說明解題步驟。請依照台灣國小課程的用語和概念作答：
+
+【解題說明規則】
+1. 條列式，每步驟一行，最後寫完整算式
+2. 不要有開場白或結尾客套話
+3. 依照各題型使用正確的課程概念：
+
+▌和差問題、分配問題
+   用「總數」「差」「平均分配」說明，步驟：求差→求底數→各自數量
+
+▌周長問題
+   說明「周長÷2 = 長+寬」，再用和差方法求長和寬
+
+▌移轉問題（給出後兩人一樣多）
+   說明「給出後兩人一樣多，所以給出後每人有幾個→被給的人原來有幾個」
+
+▌年齡倍數問題（幾年後/前是幾倍）
+   必須使用「基準量」「比較量」概念說明：
+   - 指出誰是基準量、誰是比較量
+   - 說明年齡差永遠不變
+   - 套用公式：年齡差 = 基準量 × (倍數-1)
+   - 求出基準量（較小者的年齡），再算出是幾年後
+
+▌年齡和問題（幾年後年齡和為多少）
+   只說明「年齡差不變」框架，步驟：年齡差固定→目標和扣年齡差→剩餘平分→求兒子未來年齡→求年數
+   ⚠️ 不要補充第二種方法，方法二有獨立說明`;
+
+const ALT_SYSTEM_PROMPT = `你是國小數學教具設計師。根據年齡和目標題，設計「每年增長法」積木配置。
+只輸出 JSON，不要有任何其他文字或 markdown。
+
+{
+  "blockGroups": [...],
+  "dropZones": [...],
+  "hint": "...",
+  "checkAnswers": [...]
+}
+
+計算步驟：
+1. 現在兩人年齡和 = 兩人年齡相加
+2. 距目標的差距 = 目標和 - 現在和
+3. 每年兩人年齡和增加2歲，需要 差距÷2 年
+
+設計規則：
+- blockGroups：amber色，數量 = 目標和 - 現在和
+- dropZones：2格，id 用 "alt1"、"alt2"，label「爸爸增加的歲數」「兒子增加的歲數」
+- hint：①說明每過1年兩人各長1歲年齡和+2 ②積木=現在和到目標的差距 ③平分2格，每格=需要幾年 ④用問句引導不直接說答案
+- checkAnswers：兩格各 expected = 差距÷2，⚠️必須包含 zoneId 對應 dropZones 的 id，格式：[{"zoneId":"alt1","expected":7},{"zoneId":"alt2","expected":7}]
+- 鐵律：blockGroups count總和必須嚴格等於checkAnswers expected總和`;
+
+
+/* ── GAS Proxy 呼叫 ── */
+async function callGemini(systemPrompt, userMessage, maxTokens = 1500) {
+  if (!GAS_PROXY_URL || GAS_PROXY_URL.startsWith("請填入")) {
+    throw new Error("請先在 HTML 檔案頂端填入 GAS Proxy 網址與通關密語");
+  }
+  const res = await fetch(GAS_PROXY_URL, {
+    method: "POST",
+    redirect: "follow",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify({
+      token: ACCESS_TOKEN,
+      model: GEMINI_MODEL,
+      payload: {
+        system_instruction: { parts: [{ text: systemPrompt }] },
+        contents: [{ parts: [{ text: userMessage }] }],
+        generationConfig: { maxOutputTokens: maxTokens, temperature: 0.2 },
+      }
+    }),
+  });
+  if (!res.ok) throw new Error("GAS 回應錯誤：HTTP " + res.status);
+  const data = await res.json();
+  if (data.error) {
+    let msg = data.error.message || "未知錯誤";
+    if (data.error.code === 403) msg = "❌ 通關密語不符，請確認 ACCESS_TOKEN 設定正確";
+    if (data.error.code === 429) msg = "❌ 請求次數超限，請稍等 1 分鐘後再試";
+    if (data.error.code === 500) msg = "❌ GAS 伺服器錯誤：" + msg;
+    throw new Error(msg);
+  }
+  return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+}
+
+/* ── 拖曳積木（含觸控支援） ── */
+function DragBlock({ block, onDragStart, onDragEnd, onTouchDrop }) {
+  const c = COLORS[block.color] || COLORS.blue;
+  const ref = React.useRef(null);
+
+  React.useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    const onTouchStart = e => {
+      e.preventDefault(); // passive:false 才有效
+      onDragStart(block.id);
+      const touch = e.touches[0];
+      const clone = document.createElement("div");
+      clone.id = "__drag_clone__";
+      clone.style.cssText = `position:fixed;width:30px;height:30px;border-radius:5px;background:${c.fill};border:2px solid ${c.border};opacity:0.85;pointer-events:none;z-index:9999;left:${touch.clientX-15}px;top:${touch.clientY-15}px;`;
+      document.body.appendChild(clone);
+    };
+
+    const onTouchMove = e => {
+      e.preventDefault(); // 阻止捲動，passive:false 才有效
+      const touch = e.touches[0];
+      const clone = document.getElementById("__drag_clone__");
+      if (clone) { clone.style.left = (touch.clientX-15)+"px"; clone.style.top = (touch.clientY-15)+"px"; }
+    };
+
+    const onTouchEnd = e => {
+      e.preventDefault();
+      const clone = document.getElementById("__drag_clone__");
+      if (clone) clone.remove();
+      const touch = e.changedTouches[0];
+      const el2 = document.elementFromPoint(touch.clientX, touch.clientY);
+      const zone = el2 && el2.closest("[data-zone-id]");
+      if (zone) onTouchDrop(zone.dataset.zoneId);
+      else onDragEnd();
+    };
+
+    el.addEventListener("touchstart", onTouchStart, { passive: false });
+    el.addEventListener("touchmove",  onTouchMove,  { passive: false });
+    el.addEventListener("touchend",   onTouchEnd,   { passive: false });
+    return () => {
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchmove",  onTouchMove);
+      el.removeEventListener("touchend",   onTouchEnd);
+    };
+  }, [block.id, c.fill, c.border, onDragStart, onDragEnd, onTouchDrop]);
+
+  return (
+    <div
+      ref={ref}
+      draggable
+      onDragStart={e => { e.dataTransfer.effectAllowed = "move"; onDragStart(block.id); }}
+      onDragEnd={onDragEnd}
+      title={block.label}
+      style={{ width:26, height:26, borderRadius:5, background:c.fill, border:`1px solid ${c.border}88`, cursor:"grab", flexShrink:0, touchAction:"none" }}
+      onMouseEnter={e => e.currentTarget.style.transform = "translateY(-2px)"}
+      onMouseLeave={e => e.currentTarget.style.transform = "translateY(0)"}
+    />
+  );
+}
+
+function DragZone({ zone, blocks, onDrop, onDragStart, onDragEnd, onTouchDrop, feedbackStatus }) {
+  const [over, setOver] = useState(false);
+  const borderColor = feedbackStatus==="correct" ? "#3B6D11" : feedbackStatus==="wrong" ? "#A32D2D" : over ? "#378ADD" : "#e2e8f0";
+  return (
+    <div
+      data-zone-id={zone.id}
+      onDragOver={e => { e.preventDefault(); setOver(true); }}
+      onDragLeave={() => setOver(false)}
+      onDrop={e => { e.preventDefault(); setOver(false); onDrop(zone.id); }}
+      style={{ background: over ? "#f0f9ff" : "#fff", border:`1.5px solid ${borderColor}`, borderRadius:12, padding:"14px 16px", minHeight:110, flex:1, transition:"border-color 0.15s, background 0.15s" }}
+    >
+      <div style={{ fontSize:13, color:"#64748b", marginBottom:8, fontWeight:500 }}>
+        {zone.label}
+        <span style={{ marginLeft:6, fontWeight:400, color:"#94a3b8" }}>（{blocks.length} 個）</span>
+      </div>
+      <div style={{ display:"flex", flexWrap:"wrap", gap:5, minHeight:28 }}>
+        {blocks.map(b => <DragBlock key={b.id} block={b} onDragStart={onDragStart} onDragEnd={onDragEnd} onTouchDrop={zoneId => { onTouchDrop(zoneId); }} />)}
+      </div>
+      {feedbackStatus==="correct" && <div style={{ marginTop:8, fontSize:13, color:"#27500A", fontWeight:600 }}>✓ 正確！</div>}
+      {feedbackStatus==="wrong"   && <div style={{ marginTop:8, fontSize:13, color:"#791F1F" }}>✗ 數量不對，再試試！</div>}
+    </div>
+  );
+}
+
+/* ── 輸入模式 ── */
+function InputZone({ zone, count, total, blockGroups, totalAllocated, onChange, feedbackStatus }) {
+  const borderColor = feedbackStatus==="correct" ? "#3B6D11" : feedbackStatus==="wrong" ? "#A32D2D" : "#e2e8f0";
+  const adjust = delta => {
+    const max = total - (totalAllocated - count);
+    onChange(zone.id, Math.max(0, Math.min(max, count + delta)));
+  };
+  const handleInput = e => {
+    const v = parseInt(e.target.value, 10);
+    if (!isNaN(v)) {
+      const max = total - (totalAllocated - count);
+      onChange(zone.id, Math.max(0, Math.min(max, v)));
+    }
+  };
+  const segments = [];
+  let remaining = count;
+  for (const g of blockGroups) {
+    const take = Math.min(remaining, g.count);
+    if (take > 0) { segments.push({...g, take}); remaining -= take; }
+    if (remaining <= 0) break;
+  }
+  const btn = (label, delta, w=34) => (
+    <button onClick={() => adjust(delta)}
+      style={{ width:w, height:36, borderRadius:6, border:"1px solid #e2e8f0", background:"#f8fafc", fontSize: w>34?12:18, fontWeight:700, cursor:"pointer", color:"#475569" }}>
+      {label}
+    </button>
+  );
+  return (
+    <div style={{ background:"#fff", border:`1.5px solid ${borderColor}`, borderRadius:12, padding:"16px 18px", flex:1, transition:"border-color 0.2s" }}>
+      <div style={{ fontSize:13, color:"#64748b", marginBottom:12, fontWeight:500 }}>{zone.label}</div>
+      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:14, flexWrap:"wrap" }}>
+        {btn("−10", -10, 44)} {btn("−", -1)} 
+        <input type="number" min={0} max={total} value={count} onChange={handleInput}
+          style={{ width:80, textAlign:"center", fontSize:22, fontWeight:800, border:"1px solid #e2e8f0", borderRadius:8, padding:"4px 6px", color:"#1e293b", fontFamily:"inherit", outline:"none" }}
+          onFocus={e => e.target.style.border = "1px solid #378ADD"}
+          onBlur={e => e.target.style.border = "1px solid #e2e8f0"}
+        />
+        {btn("＋", 1)} {btn("＋10", 10, 44)}
+      </div>
+      <div style={{ height:20, borderRadius:6, overflow:"hidden", display:"flex", background:"#f1f5f9", border:"1px solid #e2e8f0" }}>
+        {segments.map((seg, i) => {
+          const c = COLORS[seg.color] || COLORS.blue;
+          return <div key={i} title={`${seg.label}：${seg.take}`} style={{ width:`${(seg.take/total)*100}%`, background:c.fill, transition:"width 0.2s" }} />;
+        })}
+      </div>
+      {feedbackStatus==="correct" && <div style={{ marginTop:8, fontSize:13, color:"#27500A", fontWeight:600 }}>✓ 正確！</div>}
+      {feedbackStatus==="wrong"   && <div style={{ marginTop:8, fontSize:13, color:"#791F1F" }}>✗ 數量不對，再試試！</div>}
+    </div>
+  );
+}
+
+/* ── 主元件 ── */
+function App() {
+  const [problem, setProblem]         = useState("飲料店推行集點卡，哥哥收集了32點，給弟弟6點後兩人的點數一樣多，弟弟原來有幾點？");
+  const [loading, setLoading]         = useState(false);
+  const [config, setConfig]           = useState(null);
+  const [blocks, setBlocks]           = useState([]);
+  const [draggingId, setDraggingId]   = useState(null);
+  const [zoneCounts, setZoneCounts]   = useState({});
+  const [feedback, setFeedback]       = useState({});
+  const [allCorrect, setAllCorrect]   = useState(false);
+  const [error, setError]             = useState("");
+  const [thinking, setThinking]       = useState("");
+  const [showThinking, setShowThinking] = useState(false);
+  const [invalidProblem, setInvalidProblem] = useState("");
+  const [explanation, setExplanation] = useState("");
+  const [loadingExpl, setLoadingExpl] = useState(false);
+  const [altExplanation, setAltExplanation] = useState("");
+  const [loadingAltExpl, setLoadingAltExpl] = useState(false);
+
+  // ── 第二階段 state ──
+  const [hasAlt, setHasAlt]               = useState(false);
+  const [loadingAlt, setLoadingAlt]       = useState(false);
+  const [altConfig, setAltConfig]         = useState(null);
+  const [altBlocks, setAltBlocks]         = useState([]);
+  const [altZoneCounts, setAltZoneCounts] = useState({});
+  const [altFeedback, setAltFeedback]     = useState({});
+  const [altAllCorrect, setAltAllCorrect] = useState(false);
+  const [altModeChoice, setAltModeChoice] = useState(null);
+  const [showAlt, setShowAlt]             = useState(false);
+  // ── 模式 ──
+  const [modeChoice, setModeChoice]       = useState(null);
+
+  const total = config ? config.blockGroups.reduce((s,g) => s+g.count, 0) : 0;
+  const isDragMode = modeChoice === "drag";
+  const totalAllocated = Object.values(zoneCounts).reduce((s,v) => s+v, 0);
+  const altTotal = altConfig ? altConfig.blockGroups.reduce((s,g) => s+g.count, 0) : 0;
+  const altIsDragMode = altModeChoice === "drag";
+  const altTotalAllocated = Object.values(altZoneCounts).reduce((s,v) => s+v, 0);
+
+  const generate = async () => {
+    if (!problem.trim()) return;
+    setLoading(true);
+    setConfig(null); setBlocks([]); setZoneCounts({});
+    setFeedback({}); setAllCorrect(false); setError("");
+    setThinking(""); setShowThinking(false); setInvalidProblem(""); setExplanation(""); setAltExplanation("");
+    setModeChoice(null);
+    setAltConfig(null); setAltBlocks([]); setAltZoneCounts({});
+    setAltFeedback({}); setAltAllCorrect(false); setAltModeChoice(null); setShowAlt(false);
+    setHasAlt(false); setLoadingAlt(false);
+
+    try {
+      // 雙解法題型（如年齡和目標題）JSON 較長，給足夠的 token 空間
+      const raw = await callGemini(SYSTEM_PROMPT, problem, 4000);
+      // 移除 markdown 程式碼區塊（支援前後有多餘空白或換行的情況）
+      const stripped = raw.replace(/[\s\S]*?```(?:json)?\s*/i, "").replace(/\s*```[\s\S]*/i, "").trim();
+      const match = stripped.match(/\{[\s\S]*\}/);
+      if (!match) {
+        const preview = raw.slice(0, 300);
+        const truncated = raw.length > 300 ? "…（已截斷）" : "";
+        throw new Error("回應中找不到完整 JSON（可能被截斷），原始回應：" + preview + truncated);
+      }
+      // 逐字元掃描：對 JSON 字串值內的控制字元做跳脫，避免 regex 遺漏巢狀或多行情況
+      const safeJson = (() => {
+        const s = match[0];
+        let out = "", inStr = false, esc = false;
+        for (let i = 0; i < s.length; i++) {
+          const ch = s[i];
+          if (esc) { out += ch; esc = false; continue; }
+          if (ch === "\\" && inStr) { out += ch; esc = true; continue; }
+          if (ch === '"') { inStr = !inStr; out += ch; continue; }
+          if (inStr) {
+            if      (ch === "\n") { out += "\\n"; continue; }
+            else if (ch === "\r") { out += "\\r"; continue; }
+            else if (ch === "\t") { out += "\\t"; continue; }
+            else if (ch.charCodeAt(0) < 0x20) { out += "\\u" + ch.charCodeAt(0).toString(16).padStart(4,"0"); continue; }
+          }
+          out += ch;
+        }
+        return out;
+      })();
+      const cfg = JSON.parse(safeJson);
+      if (!cfg.blockGroups || !cfg.dropZones || !cfg.checkAnswers) throw new Error("JSON 欄位不完整");
+
+      if (cfg.thinking) {
+        setThinking(cfg.thinking);
+        const t = cfg.thinking;
+        if (t.includes("無解") || t.includes("無整數解") || t.includes("題目有誤") || t.includes("不可能")) {
+          setInvalidProblem(t);
+        }
+      }
+
+      // 前端校正：確保積木總數 = 答案總數
+      const blockTotal  = cfg.blockGroups.reduce((s,g) => s+g.count, 0);
+      const answerTotal = cfg.checkAnswers.reduce((s,a) => s+a.expected, 0);
+      if (blockTotal !== answerTotal && blockTotal > 0) {
+        const ratio = answerTotal / blockTotal;
+        cfg.blockGroups = cfg.blockGroups.map(g => ({...g, count: Math.round(g.count * ratio)}));
+        const fixedTotal = cfg.blockGroups.reduce((s,g) => s+g.count, 0);
+        const diff = answerTotal - fixedTotal;
+        if (diff !== 0) cfg.blockGroups[0].count += diff;
+      }
+
+      setConfig(cfg);
+      setHasAlt(!!cfg.hasAlt);
+
+      // 初始化第一階段（兩種模式都準備好）
+      let id = 0; const nb = [];
+      for (const g of cfg.blockGroups) {
+        const color = COLORS[g.color] ? g.color : Object.keys(COLORS)[id % 8];
+        for (let i = 0; i < g.count; i++) nb.push({id: id++, color, label: g.label, zone: "pool"});
+      }
+      setBlocks(nb);
+      const init = {}; for (const z of cfg.dropZones) init[z.id] = 0; setZoneCounts(init);
+      setModeChoice(null);
+
+    } catch(e) { setError("生成失敗：" + e.message); }
+    setLoading(false);
+  };
+
+  const handleDrop = useCallback(zoneId => {
+    if (draggingId === null) return;
+    if (draggingId >= 1000) {
+      // 第二階段積木
+      setAltBlocks(prev => prev.map(b => b.id === draggingId ? {...b, zone: zoneId} : b));
+      setAltFeedback({}); setAltAllCorrect(false);
+    } else {
+      setBlocks(prev => prev.map(b => b.id === draggingId ? {...b, zone: zoneId} : b));
+      setFeedback({}); setAllCorrect(false);
+    }
+    setDraggingId(null);
+  }, [draggingId]);
+
+  const handleZoneChange = (zoneId, newCount) => {
+    setZoneCounts(prev => ({...prev, [zoneId]: newCount}));
+    setFeedback({}); setAllCorrect(false);
+  };
+
+  const reset = () => {
+    setBlocks(prev => prev.map(b => ({...b, zone:"pool"})));
+    const init = {}; for (const z of config.dropZones) init[z.id] = 0; setZoneCounts(init);
+    setFeedback({}); setAllCorrect(false);
+  };
+  const switchMode = (mode) => { setModeChoice(mode); setFeedback({}); setAllCorrect(false); };
+
+  const altReset = () => {
+    setAltBlocks(prev => prev.map(b => ({...b, zone:"pool"})));
+    const init = {}; for (const z of altConfig.dropZones) init[z.id] = 0; setAltZoneCounts(init);
+    setAltFeedback({}); setAltAllCorrect(false);
+  };
+  const altSwitchMode = (mode) => { setAltModeChoice(mode); setAltFeedback({}); setAltAllCorrect(false); };
+
+  const altHandleDrop = useCallback(zoneId => {
+    if (draggingId === null) return;
+    setAltBlocks(prev => prev.map(b => b.id === draggingId ? {...b, zone: zoneId} : b));
+    setDraggingId(null);
+    setAltFeedback({}); setAltAllCorrect(false);
+  }, [draggingId]);
+
+  const altCheck = () => {
+    if (!altConfig) return;
+    const fb = {}; let ok = true;
+    altConfig.checkAnswers.forEach((ca, idx) => {
+      // 若 AI 沒有輸出 zoneId，用 dropZones 的第 idx 個 id 當 fallback
+      const zid = ca.zoneId || altConfig.dropZones[idx]?.id;
+      const count = altIsDragMode
+        ? altBlocks.filter(b => b.zone === zid).length
+        : (altZoneCounts[zid] || 0);
+      fb[zid] = count === ca.expected ? "correct" : "wrong";
+      if (count !== ca.expected) ok = false;
+    });
+    setAltFeedback(fb); setAltAllCorrect(ok);
+  };
+
+  const check = () => {
+    if (!config) return;
+    const fb = {}; let ok = true;
+    for (const ca of config.checkAnswers) {
+      const count = isDragMode ? blocks.filter(b => b.zone===ca.zoneId).length : (zoneCounts[ca.zoneId]||0);
+      fb[ca.zoneId] = count === ca.expected ? "correct" : "wrong";
+      if (count !== ca.expected) ok = false;
+    }
+    setFeedback(fb); setAllCorrect(ok);
+    if (ok) setShowAlt(false); // 答對後收起（若已展開則保持，否則等按鈕）
+  };
+
+  const fetchExplanation = async () => {
+    setLoadingExpl(true); setExplanation("");
+    try {
+      const text = await callGemini(EXPL_PROMPT, `請說明這道題目的完整解題步驟和算式：${problem}`, 2000);
+      setExplanation(text);
+    } catch(e) { setExplanation("無法載入解題說明，請稍後再試。"); }
+    setLoadingExpl(false);
+  };
+
+  const fetchAltConfig = async () => {
+    if (altConfig) { setShowAlt(true); return; } // 已載入過，直接顯示
+    setLoadingAlt(true);
+    try {
+      const raw = await callGemini(ALT_SYSTEM_PROMPT, problem, 1200);
+      const stripped = raw.replace(/[\s\S]*?```(?:json)?\s*/i, "").replace(/\s*```[\s\S]*/i, "").trim();
+      const match = stripped.match(/\{[\s\S]*\}/);
+      if (!match) throw new Error("找不到 JSON");
+      const ac = JSON.parse((() => {
+        const s = match[0]; let out = "", inStr = false, esc = false;
+        for (let i = 0; i < s.length; i++) {
+          const ch = s[i];
+          if (esc) { out += ch; esc = false; continue; }
+          if (ch === "\\" && inStr) { out += ch; esc = true; continue; }
+          if (ch === '"') { inStr = !inStr; out += ch; continue; }
+          if (inStr) {
+            if (ch === "\n") { out += "\\n"; continue; }
+            if (ch === "\r") { out += "\\r"; continue; }
+            if (ch === "\t") { out += "\\t"; continue; }
+            if (ch.charCodeAt(0) < 0x20) { out += "\\u" + ch.charCodeAt(0).toString(16).padStart(4,"0"); continue; }
+          }
+          out += ch;
+        }
+        return out;
+      })());
+      // 前端校正：積木總數 = 答案總數
+      const acBT = ac.blockGroups.reduce((s,g) => s+g.count, 0);
+      const acAT = ac.checkAnswers.reduce((s,a) => s+a.expected, 0);
+      if (acBT !== acAT && acBT > 0) {
+        const ratio = acAT / acBT;
+        ac.blockGroups = ac.blockGroups.map(g => ({...g, count: Math.round(g.count * ratio)}));
+        const ft = ac.blockGroups.reduce((s,g) => s+g.count, 0);
+        if (acAT - ft !== 0) ac.blockGroups[0].count += acAT - ft;
+      }
+      setAltConfig(ac);
+      let aid = 1000; const anb = [];
+      for (const g of ac.blockGroups) {
+        const color = COLORS[g.color] ? g.color : "amber";
+        for (let i = 0; i < g.count; i++) anb.push({id: aid++, color, label: g.label, zone: "pool"});
+      }
+      setAltBlocks(anb);
+      const ainit = {}; for (const z of ac.dropZones) ainit[z.id] = 0; setAltZoneCounts(ainit);
+      setShowAlt(true);
+    } catch(e) { setError("另一種方法載入失敗：" + e.message); }
+    setLoadingAlt(false);
+  };
+
+  const fetchAltExplanation = async () => {
+    setLoadingAltExpl(true); setAltExplanation("");
+    try {
+      const text = await callGemini(EXPL_PROMPT,
+        `請只說明「每年增長法」的解題步驟和算式（不用說年齡差方法）：${problem}`, 1000);
+      setAltExplanation(text);
+    } catch(e) { setAltExplanation("無法載入解題說明，請稍後再試。"); }
+    setLoadingAltExpl(false);
+  };
+
+  const poolBlocks = blocks.filter(b => b.zone === "pool");
+  const card = {background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, padding:"16px 18px"};
+
+  return (
+    <div style={{ fontFamily:"'Nunito','Noto Sans TC',sans-serif", padding:20, maxWidth:700, margin:"0 auto" }}>
+
+      {/* 標題 */}
+      <div style={{ marginBottom:16, paddingBottom:12, borderBottom:"1px solid #e2e8f0" }}>
+        <h1 style={{ margin:0, fontSize:20, fontWeight:800, color:"#1e293b" }}>🧱 積木解題工具</h1>
+        <p style={{ margin:"4px 0 0", fontSize:13, color:"#94a3b8" }}>輸入數學文字題，AI 自動產生積木，學生透過分配積木理解解題思路</p>
+      </div>
+
+      {/* 設定未完成警告 */}
+      {(GAS_PROXY_URL.startsWith("請填入") || ACCESS_TOKEN.startsWith("請填入")) && (
+        <div style={{ marginBottom:16, padding:"12px 16px", background:"#FAEEDA", border:"1px solid #D4A05A", borderRadius:10, fontSize:14, color:"#633806", lineHeight:1.7 }}>
+          ⚠️ <strong>尚未完成設定</strong><br/>
+          請用記事本開啟此 HTML 檔案，填入 <code>GAS_PROXY_URL</code>（GAS 部署網址）
+          和 <code>ACCESS_TOKEN</code>（通關密語），存檔後重新整理頁面。
+        </div>
+      )}
+
+      {/* 題目輸入 */}
+      <div style={{...card, marginBottom:16}}>
+        <div style={{ fontSize:13, color:"#64748b", marginBottom:6 }}>輸入數學題目</div>
+        <textarea value={problem} onChange={e => setProblem(e.target.value)} rows={3}
+          style={{ width:"100%", fontSize:15, padding:"8px 10px", borderRadius:8, border:"1px solid #e2e8f0", fontFamily:"inherit", resize:"vertical", lineHeight:1.6, outline:"none" }}
+          onFocus={e => e.target.style.border = "1px solid #378ADD"}
+          onBlur={e => e.target.style.border = "1px solid #e2e8f0"}
+        />
+        <div style={{ marginTop:10, display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
+          <button onClick={generate} disabled={loading}
+            style={{ padding:"8px 20px", background:loading?"#94a3b8":"#378ADD", color:"#fff", border:"none", borderRadius:8, fontSize:14, fontWeight:700, cursor:loading?"not-allowed":"pointer", fontFamily:"inherit" }}>
+            {loading ? "分析中…" : "產生積木"}
+          </button>
+          {config && (
+            <button onClick={reset}
+              style={{ padding:"8px 16px", background:"#f1f5f9", color:"#475569", border:"none", borderRadius:8, fontSize:14, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>
+              重置
+            </button>
+          )}
+          {config && modeChoice && (
+            <div style={{ display:"flex", gap:4, alignItems:"center", background:"#f1f5f9", borderRadius:8, padding:"3px" }}>
+              <button onClick={() => switchMode("drag")}
+                style={{ padding:"5px 12px", background:isDragMode?"#378ADD":"transparent", color:isDragMode?"#fff":"#64748b", border:"none", borderRadius:6, fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}>
+                🖱 拖曳
+              </button>
+              <button onClick={() => switchMode("input")}
+                style={{ padding:"5px 12px", background:!isDragMode?"#378ADD":"transparent", color:!isDragMode?"#fff":"#64748b", border:"none", borderRadius:6, fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}>
+                ⌨ 輸入
+              </button>
+            </div>
+          )}
+        </div>
+        {error && (
+          <div style={{ marginTop:10, fontSize:13, color:"#A32D2D", background:"#FCEBEB", border:"1px solid #F09595", borderRadius:8, padding:"8px 12px", wordBreak:"break-all" }}>
+            {error}
+          </div>
+        )}
+      </div>
+
+      {config && (<>
+
+        {/* 提示 */}
+        <div style={{ fontSize:14, padding:"10px 14px", background:"#EAF3DE", color:"#27500A", borderRadius:8, marginBottom:8, border:"1px solid #C0DD97", lineHeight:1.7 }}>
+          💡 {config.hint}
+        </div>
+
+        {/* 題目有誤警告 */}
+        {invalidProblem && (
+          <div style={{ fontSize:14, padding:"10px 14px", background:"#FCEBEB", color:"#791F1F", borderRadius:8, marginBottom:8, border:"1px solid #F09595" }}>
+            ⚠️ AI 判斷此題目可能有誤或無整數解，請確認題目數字是否正確。
+            <button onClick={() => setShowThinking(true)}
+              style={{ marginLeft:8, fontSize:12, color:"#791F1F", background:"none", border:"none", cursor:"pointer", textDecoration:"underline", fontFamily:"inherit" }}>
+              查看詳細原因
+            </button>
+          </div>
+        )}
+
+        {/* AI 計算過程（教師確認用）*/}
+        {thinking && (
+          <div style={{ marginBottom:12 }}>
+            <button onClick={() => setShowThinking(v => !v)}
+              style={{ fontSize:12, color:"#94a3b8", background:"none", border:"none", cursor:"pointer", padding:"2px 0", fontFamily:"inherit" }}>
+              {showThinking ? "▲ 隱藏 AI 計算過程" : "▼ 顯示 AI 計算過程（教師確認用）"}
+            </button>
+            {showThinking && (
+              <div style={{ marginTop:6, fontSize:13, color:"#475569", background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:8, padding:"10px 14px", whiteSpace:"pre-wrap", lineHeight:1.7 }}>
+                {thinking}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 積木圖例 */}
+        <div style={{...card, marginBottom:14}}>
+          <div style={{ fontSize:13, color:"#64748b", marginBottom:10 }}>積木說明</div>
+          <div style={{ display:"flex", flexWrap:"wrap", gap:10 }}>
+            {config.blockGroups.map((g, i) => {
+              const c = COLORS[g.color] || COLORS.blue;
+              return (
+                <div key={i} style={{ display:"flex", alignItems:"center", gap:8, background:c.bg, border:`1px solid ${c.border}55`, borderRadius:6, padding:"6px 10px" }}>
+                  <div style={{ width:18, height:18, borderRadius:4, background:c.fill, flexShrink:0 }} />
+                  <span style={{ fontSize:13, color:c.text, fontWeight:600 }}>{g.count} 個 — {g.label}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* 模式選擇 */}
+        {!modeChoice && (
+          <div style={{...card, marginBottom:14, textAlign:"center"}}>
+            <div style={{ fontSize:14, color:"#475569", marginBottom:12, fontWeight:600 }}>請選擇作答方式</div>
+            <div style={{ display:"flex", gap:12, justifyContent:"center", flexWrap:"wrap" }}>
+              <button onClick={() => switchMode("drag")}
+                style={{ padding:"14px 28px", background:"#378ADD", color:"#fff", border:"none", borderRadius:10, fontSize:15, fontWeight:700, cursor:"pointer", fontFamily:"inherit", lineHeight:1.5 }}>
+                🖱 拖曳積木<br/><span style={{ fontSize:12, fontWeight:400, opacity:0.85 }}>用手指或滑鼠移動積木</span>
+              </button>
+              <button onClick={() => switchMode("input")}
+                style={{ padding:"14px 28px", background:"#639922", color:"#fff", border:"none", borderRadius:10, fontSize:15, fontWeight:700, cursor:"pointer", fontFamily:"inherit", lineHeight:1.5 }}>
+                ⌨ 輸入數字<br/><span style={{ fontSize:12, fontWeight:400, opacity:0.85 }}>用按鈕或鍵盤填入數量</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* 拖曳模式 */}
+        {modeChoice === "drag" && (<>
+          <div
+            onDragOver={e => e.preventDefault()}
+            onDrop={e => { e.preventDefault(); handleDrop("pool"); }}
+            data-zone-id="pool"
+            style={{ background:"#fafafa", border:"1px solid #e2e8f0", borderRadius:12, padding:"14px 18px", marginBottom:8, minHeight:80 }}
+          >
+            <div style={{ fontSize:13, color:"#64748b", marginBottom:8 }}>
+              積木區 <span style={{ color:"#94a3b8" }}>（{poolBlocks.length} 個）</span>
+            </div>
+            <div style={{ display:"flex", flexWrap:"wrap", gap:5, minHeight:28 }}>
+              {poolBlocks.map(b => <DragBlock key={b.id} block={b} onDragStart={setDraggingId} onDragEnd={() => setDraggingId(null)} />)}
+              {poolBlocks.length === 0 && <span style={{ fontSize:13, color:"#94a3b8", fontStyle:"italic" }}>所有積木已分配完畢</span>}
+            </div>
+          </div>
+          <div style={{ fontSize:12, color:"#94a3b8", margin:"6px 4px 12px" }}>↓ 把積木拖曳到下方區域</div>
+          <div style={{ display:"flex", gap:12, marginBottom:16, flexWrap:"wrap" }}>
+            {config.dropZones.map(zone => (
+              <DragZone key={zone.id} zone={zone}
+                blocks={blocks.filter(b => b.zone === zone.id)}
+                onDrop={handleDrop}
+                onDragStart={setDraggingId}
+                onDragEnd={() => setDraggingId(null)}
+                onTouchDrop={handleDrop}
+                feedbackStatus={feedback[zone.id]}
+              />
+            ))}
+          </div>
+        </>)}
+
+        {/* 輸入模式 */}
+        {modeChoice === "input" && (<>
+          <div style={{...card, marginBottom:14}}>
+            <div style={{ display:"flex", justifyContent:"space-between", fontSize:13, color:"#64748b", marginBottom:8 }}>
+              <span>總計分配進度</span>
+              <span style={{ fontWeight:700, color: totalAllocated===total ? "#27500A" : totalAllocated>total ? "#A32D2D" : "#1e293b" }}>
+                {totalAllocated} / {total}
+                {totalAllocated > total && <span style={{ marginLeft:6 }}>超出！</span>}
+              </span>
+            </div>
+            <div style={{ height:14, borderRadius:6, background:"#f1f5f9", overflow:"hidden" }}>
+              <div style={{
+                height:"100%",
+                width:`${Math.min(100, (totalAllocated/total)*100)}%`,
+                background: totalAllocated===total ? "#639922" : totalAllocated>total ? "#E24B4A" : "#378ADD",
+                borderRadius:6, transition:"width 0.2s, background 0.3s"
+              }} />
+            </div>
+          </div>
+          <div style={{ display:"flex", gap:12, marginBottom:16, flexWrap:"wrap" }}>
+            {config.dropZones.map(zone => (
+              <InputZone key={zone.id} zone={zone}
+                count={zoneCounts[zone.id]||0}
+                total={total}
+                blockGroups={config.blockGroups}
+                totalAllocated={totalAllocated}
+                onChange={handleZoneChange}
+                feedbackStatus={feedback[zone.id]}
+              />
+            ))}
+          </div>
+        </>)}
+
+        {/* 檢查答案 */}
+        {modeChoice && <button onClick={check}
+          style={{ padding:"9px 22px", background:"#639922", color:"#fff", border:"none", borderRadius:8, fontSize:14, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}>
+          檢查答案
+        </button>}
+
+        {/* 答對區塊 */}
+        {allCorrect && (
+          <div style={{ marginTop:14 }}>
+            <div style={{ textAlign:"center", padding:16, background:"#EAF3DE", border:"1px solid #97C459", borderRadius:12 }}>
+              <div style={{ fontSize:26 }}>🎉</div>
+              <div style={{ fontWeight:800, fontSize:16, color:"#27500A", marginTop:4 }}>全部正確！解題成功！</div>
+              <div style={{ display:"flex", gap:10, justifyContent:"center", flexWrap:"wrap", marginTop:10 }}>
+                {hasAlt && !showAlt && (
+                  <button onClick={fetchAltConfig} disabled={loadingAlt}
+                    style={{ padding:"8px 18px", background:loadingAlt?"#94a3b8":"#F6C94E", color:loadingAlt?"#fff":"#3D2B00", border:"none", borderRadius:8, fontSize:14, fontWeight:700, cursor:loadingAlt?"not-allowed":"pointer", fontFamily:"inherit" }}>
+                    {loadingAlt ? "載入中…" : "💡 還有另一種方法！"}
+                  </button>
+                )}
+                <button onClick={fetchExplanation} disabled={loadingExpl}
+                  style={{ padding:"8px 18px", background:loadingExpl?"#94a3b8":"#27500A", color:"#fff", border:"none", borderRadius:8, fontSize:14, fontWeight:700, cursor:loadingExpl?"not-allowed":"pointer", fontFamily:"inherit" }}>
+                  {loadingExpl ? "載入中…" : "📝 顯示完整解題步驟"}
+                </button>
+              </div>
+            </div>
+            {explanation && (
+              <div style={{ marginTop:10, ...card }}>
+                <div style={{ fontSize:13, color:"#64748b", marginBottom:10, fontWeight:600 }}>📖 解題說明</div>
+                <div style={{ fontSize:15, color:"#1e293b", lineHeight:2, whiteSpace:"pre-wrap" }}>{explanation}</div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ════ 第二階段：另一種方法 ════ */}
+        {showAlt && altConfig && (() => {
+          const altPoolBlocks = altBlocks.filter(b => b.zone === "pool");
+          return (
+            <div style={{ marginTop:18, border:"2px solid #F6C94E", borderRadius:14, padding:"16px 18px", background:"#FFFDF0" }}>
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10, flexWrap:"wrap", gap:8 }}>
+                <div style={{ fontSize:16, fontWeight:800, color:"#92600A" }}>💡 另一種解法</div>
+                <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+                  <button onClick={altReset}
+                    style={{ padding:"6px 14px", background:"#f1f5f9", color:"#475569", border:"none", borderRadius:8, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>
+                    重置
+                  </button>
+                  {altModeChoice && (
+                    <div style={{ display:"flex", gap:3, background:"#f1f5f9", borderRadius:8, padding:"3px" }}>
+                      <button onClick={() => altSwitchMode("drag")}
+                        style={{ padding:"4px 10px", background:altIsDragMode?"#F6A623":"transparent", color:altIsDragMode?"#fff":"#64748b", border:"none", borderRadius:6, fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}>
+                        🖱 拖曳
+                      </button>
+                      <button onClick={() => altSwitchMode("input")}
+                        style={{ padding:"4px 10px", background:!altIsDragMode?"#F6A623":"transparent", color:!altIsDragMode?"#fff":"#64748b", border:"none", borderRadius:6, fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}>
+                        ⌨ 輸入
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+              {/* 過渡說明卡片 */}
+              <div style={{ marginBottom:14, padding:"10px 14px", background:"#FEF3C7", border:"1px solid #F6C94E", borderRadius:10, fontSize:13, color:"#92600A", lineHeight:1.7 }}>
+                🎓 <strong>你已經用「年齡差不變」的方法解出來了！</strong><br/>
+                現在來看另一種常見的思路——「每年增長法」，這種方法也能解同一道題，看看哪種你覺得更好懂？
+              </div>
+
+              {/* 積木說明 */}
+              <div style={{...card, marginBottom:14, background:"#fff" }}>
+                <div style={{ fontSize:13, color:"#64748b", marginBottom:8 }}>積木說明</div>
+                <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
+                  {altConfig.blockGroups.map((g, i) => {
+                    const col = COLORS[g.color] || COLORS.orange;
+                    return (
+                      <div key={i} style={{ display:"flex", alignItems:"center", gap:8, background:col.bg, border:`1px solid ${col.border}55`, borderRadius:6, padding:"6px 10px" }}>
+                        <div style={{ width:16, height:16, borderRadius:4, background:col.fill }} />
+                        <span style={{ fontSize:13, color:col.text, fontWeight:600 }}>{g.count} 個 — {g.label}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 模式選擇（第二階段） */}
+              {!altModeChoice && (
+                <div style={{...card, marginBottom:14, textAlign:"center", background:"#fff"}}>
+                  <div style={{ fontSize:14, color:"#475569", marginBottom:10, fontWeight:600 }}>請選擇作答方式</div>
+                  <div style={{ display:"flex", gap:10, justifyContent:"center", flexWrap:"wrap" }}>
+                    <button onClick={() => altSwitchMode("drag")}
+                      style={{ padding:"12px 24px", background:"#F6A623", color:"#fff", border:"none", borderRadius:10, fontSize:14, fontWeight:700, cursor:"pointer", fontFamily:"inherit", lineHeight:1.5 }}>
+                      🖱 拖曳積木<br/><span style={{ fontSize:12, fontWeight:400, opacity:0.85 }}>用手指或滑鼠移動積木</span>
+                    </button>
+                    <button onClick={() => altSwitchMode("input")}
+                      style={{ padding:"12px 24px", background:"#639922", color:"#fff", border:"none", borderRadius:10, fontSize:14, fontWeight:700, cursor:"pointer", fontFamily:"inherit", lineHeight:1.5 }}>
+                      ⌨ 輸入數字<br/><span style={{ fontSize:12, fontWeight:400, opacity:0.85 }}>用按鈕或鍵盤填入數量</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* 提示 */}
+              <div style={{...card, marginBottom:14, background:"#fff", borderLeft:"4px solid #F6A623"}}>
+                <div style={{ fontSize:13, color:"#92600A", marginBottom:6, fontWeight:600 }}>💬 提示</div>
+                <div style={{ fontSize:14, color:"#3D2B00", lineHeight:1.8 }}>{altConfig.hint}</div>
+              </div>
+
+              {/* 拖曳模式（第二階段） */}
+              {altModeChoice === "drag" && (<>
+                <div style={{...card, marginBottom:14, background:"#fff"}}>
+                  <div style={{ fontSize:13, color:"#64748b", marginBottom:10 }}>積木池（共 {altPoolBlocks.length} 個）</div>
+                  <div style={{ display:"flex", flexWrap:"wrap", gap:6, minHeight:44,
+                    border:"2px dashed #d1d5db", borderRadius:8, padding:10 }}
+                    onDragOver={e => e.preventDefault()}
+                    onDrop={() => handleDrop("pool")}
+                    onTouchMove={e => { e.preventDefault(); const t=e.touches[0]; const el=document.elementFromPoint(t.clientX,t.clientY); const z=el?.closest("[data-zone]")?.dataset.zone; if(z) handleDrop(z); }}
+                  >
+                    {altPoolBlocks.map(b => {
+                      const col = COLORS[b.color] || COLORS.orange;
+                      return (
+                        <div key={b.id} draggable
+                          onDragStart={() => setDraggingId(b.id)}
+                          onTouchStart={() => setDraggingId(b.id)}
+                          style={{ width:28, height:28, borderRadius:5, background:col.fill, border:`2px solid ${col.border}`,
+                            cursor:"grab", boxShadow:draggingId===b.id?"0 0 0 2px #378ADD":"none" }}
+                          title={b.label}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+                <div style={{ display:"flex", flexWrap:"wrap", gap:10, marginBottom:14 }}>
+                  {altConfig.dropZones.map(z => {
+                    const inZone = altBlocks.filter(b => b.zone === z.id);
+                    const fb = altFeedback[z.id];
+                    const zColor = fb==="correct"?"#EAF3DE":fb==="wrong"?"#FDECEA":"#f8fafc";
+                    const zBorder = fb==="correct"?"#97C459":fb==="wrong"?"#E57373":"#e2e8f0";
+                    return (
+                      <div key={z.id} data-zone={z.id}
+                        onDragOver={e => e.preventDefault()} onDrop={() => handleDrop(z.id)}
+                        onTouchMove={e => { e.preventDefault(); const t=e.touches[0]; const el=document.elementFromPoint(t.clientX,t.clientY); const zid=el?.closest("[data-zone]")?.dataset.zone; if(zid) handleDrop(zid); }}
+                        style={{ flex:"1 1 140px", minHeight:80, background:zColor, border:`2px dashed ${zBorder}`,
+                          borderRadius:10, padding:"10px 12px" }}>
+                        <div style={{ fontSize:12, color:"#64748b", marginBottom:6, fontWeight:600 }}>{z.label}</div>
+                        <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
+                          {inZone.map(b => {
+                            const col = COLORS[b.color] || COLORS.orange;
+                            return <div key={b.id} draggable onDragStart={() => setDraggingId(b.id)} onTouchStart={() => setDraggingId(b.id)}
+                              style={{ width:28, height:28, borderRadius:5, background:col.fill, border:`2px solid ${col.border}`, cursor:"grab" }} title={b.label} />;
+                          })}
+                        </div>
+                        {fb && <div style={{ fontSize:11, marginTop:4, color:fb==="correct"?"#27500A":"#B71C1C", fontWeight:700 }}>{fb==="correct"?"✓ 正確":"✗ 再想想"}</div>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </>)}
+
+              {/* 輸入模式（第二階段） */}
+              {altModeChoice === "input" && (<>
+                <div style={{ fontSize:13, color:"#64748b", marginBottom:8 }}>
+                  共 {altTotal} 個積木，已分配 <span style={{ fontWeight:700, color: altTotalAllocated===altTotal?"#27500A":altTotalAllocated>altTotal?"#A32D2D":"#1e293b" }}>{altTotalAllocated}</span> 個
+                </div>
+                <div style={{ display:"flex", flexWrap:"wrap", gap:10, marginBottom:14 }}>
+                  {altConfig.dropZones.map(z => {
+                    const fb = altFeedback[z.id];
+                    const zColor = fb==="correct"?"#EAF3DE":fb==="wrong"?"#FDECEA":"#f8fafc";
+                    const zBorder = fb==="correct"?"#97C459":fb==="wrong"?"#E57373":"#e2e8f0";
+                    return (
+                      <div key={z.id} style={{ flex:"1 1 140px", background:zColor, border:`2px solid ${zBorder}`, borderRadius:10, padding:"12px 14px" }}>
+                        <div style={{ fontSize:12, color:"#64748b", marginBottom:8, fontWeight:600 }}>{z.label}</div>
+                        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                          <button onClick={() => { const v=Math.max(0,(altZoneCounts[z.id]||0)-1); setAltZoneCounts(p=>({...p,[z.id]:v})); setAltFeedback({}); setAltAllCorrect(false); }}
+                            style={{ width:30, height:30, border:"1px solid #e2e8f0", borderRadius:6, background:"#fff", fontSize:18, cursor:"pointer", fontFamily:"inherit" }}>−</button>
+                          <input type="number" min="0" value={altZoneCounts[z.id]||0}
+                            onChange={e => { setAltZoneCounts(p=>({...p,[z.id]:Math.max(0,parseInt(e.target.value)||0)})); setAltFeedback({}); setAltAllCorrect(false); }}
+                            style={{ width:60, textAlign:"center", fontSize:20, fontWeight:800, border:"1px solid #e2e8f0", borderRadius:8, padding:"4px 6px", color:"#1e293b", fontFamily:"inherit", outline:"none" }} />
+                          <button onClick={() => { const v=(altZoneCounts[z.id]||0)+1; setAltZoneCounts(p=>({...p,[z.id]:v})); setAltFeedback({}); setAltAllCorrect(false); }}
+                            style={{ width:30, height:30, border:"1px solid #e2e8f0", borderRadius:6, background:"#fff", fontSize:18, cursor:"pointer", fontFamily:"inherit" }}>＋</button>
+                        </div>
+                        {fb && <div style={{ fontSize:11, marginTop:6, color:fb==="correct"?"#27500A":"#B71C1C", fontWeight:700 }}>{fb==="correct"?"✓ 正確":"✗ 再想想"}</div>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </>)}
+
+              {/* 第二階段檢查答案 */}
+              {altModeChoice && <button onClick={altCheck}
+                style={{ padding:"9px 22px", background:"#F6A623", color:"#fff", border:"none", borderRadius:8, fontSize:14, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}>
+                檢查答案
+              </button>}
+
+              {/* 第二階段答對 */}
+              {altAllCorrect && (
+                <div style={{ marginTop:14 }}>
+                  <div style={{ textAlign:"center", padding:16, background:"#FFF8E7", border:"1px solid #F6C94E", borderRadius:12 }}>
+                    <div style={{ fontSize:26 }}>🌟</div>
+                    <div style={{ fontWeight:800, fontSize:16, color:"#92600A", marginTop:4 }}>兩種方法都學會了！超厲害！</div>
+                    <div style={{ fontSize:13, color:"#92600A", marginTop:6, lineHeight:1.7 }}>
+                      ✅ 方法一（年齡差不變）：年齡差固定，從目標和扣掉年齡差再平分<br/>
+                      ✅ 方法二（每年增長法）：每年兩人年齡和增加2歲，算出需要幾年
+                    </div>
+                    <button onClick={fetchAltExplanation} disabled={loadingAltExpl}
+                      style={{ marginTop:12, padding:"8px 18px", background:loadingAltExpl?"#94a3b8":"#92600A", color:"#fff", border:"none", borderRadius:8, fontSize:14, fontWeight:700, cursor:loadingAltExpl?"not-allowed":"pointer", fontFamily:"inherit" }}>
+                      {loadingAltExpl ? "載入中…" : "📝 顯示方法二的解題步驟"}
+                    </button>
+                  </div>
+                  {altExplanation && (
+                    <div style={{ marginTop:10, background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, padding:"16px 18px" }}>
+                      <div style={{ fontSize:13, color:"#64748b", marginBottom:10, fontWeight:600 }}>📖 方法二解題說明（每年增長法）</div>
+                      <div style={{ fontSize:15, color:"#1e293b", lineHeight:2, whiteSpace:"pre-wrap" }}>{altExplanation}</div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+      </>)}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
