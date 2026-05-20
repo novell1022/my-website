@@ -28,7 +28,6 @@
       overflow-x: hidden;
     }
 
-    /* ── 格紋背景 ── */
     body::before {
       content: '';
       position: fixed;
@@ -42,7 +41,6 @@
       z-index: 0;
     }
 
-    /* ── 裝飾紅色邊線 ── */
     body::after {
       content: '';
       position: fixed;
@@ -63,10 +61,7 @@
       padding: 60px 24px 80px 80px;
     }
 
-    /* ── 標頭 ── */
-    header {
-      margin-bottom: 56px;
-    }
+    header { margin-bottom: 56px; }
 
     .header-label {
       font-family: 'DM Mono', monospace;
@@ -121,7 +116,6 @@
       max-width: 480px;
     }
 
-    /* ── 分區標題 ── */
     .section-label {
       font-family: 'DM Mono', monospace;
       font-size: 10px;
@@ -134,7 +128,6 @@
       border-bottom: 1px solid var(--rule);
     }
 
-    /* ── 工具卡片格 ── */
     .cards {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
@@ -172,11 +165,8 @@
       border-color: var(--card-color, var(--accent));
     }
 
-    .card:hover::before {
-      transform: scaleX(1);
-    }
+    .card:hover::before { transform: scaleX(1); }
 
-    /* 右上角角標 */
     .card-badge {
       position: absolute;
       top: 16px; right: 18px;
@@ -231,18 +221,15 @@
       transition: transform 0.2s;
     }
 
-    .card:hover .card-arrow {
-      transform: translate(3px, -3px);
-    }
+    .card:hover .card-arrow { transform: translate(3px, -3px); }
 
-    /* ── 顏色主題 ── */
-    .card-class   { --card-color: var(--blue);   }
-    .card-math    { --card-color: var(--green);  }
-    .card-mathl   { --card-color: var(--purple); }
-    .card-math3l  { --card-color: #b07d2a;       }
-    .card-team    { --card-color: var(--red);    }
+    .card-class  { --card-color: var(--blue);   }
+    .card-math1  { --card-color: var(--green);  }
+    .card-math2  { --card-color: var(--purple); }
+    .card-math3  { --card-color: #b07d2a;       }
+    .card-math4  { --card-color: #7a3a6a;       }
+    .card-team   { --card-color: var(--red);    }
 
-    /* ── 小標記 (tag) ── */
     .tag {
       display: inline-block;
       font-family: 'DM Mono', monospace;
@@ -259,8 +246,8 @@
     .tag-free    { color: var(--purple); border-color: var(--purple); background: #f0e8f8; }
     .tag-local   { color: var(--red);    border-color: var(--red);    background: #f8e8e8; }
     .tag-new     { color: #b07d2a;        border-color: #b07d2a;        background: #fdf0d8; }
+    .tag-v4      { color: #7a3a6a;        border-color: #7a3a6a;        background: #f5e8f2; }
 
-    /* ── 頁尾 ── */
     footer {
       margin-top: 64px;
       padding-top: 24px;
@@ -275,7 +262,6 @@
       gap: 8px;
     }
 
-    /* ── 頁碼裝飾 ── */
     .page-num {
       position: fixed;
       bottom: 32px; right: 32px;
@@ -291,19 +277,19 @@
       .cards { grid-template-columns: 1fr; }
     }
 
-    /* ── 淡入動畫 ── */
     @keyframes fadeUp {
       from { opacity: 0; transform: translateY(16px); }
       to   { opacity: 1; transform: translateY(0); }
     }
 
-    header { animation: fadeUp 0.5s ease both; }
-    .section-label { animation: fadeUp 0.5s ease 0.1s both; }
-    .card:nth-child(1) { animation: fadeUp 0.5s ease 0.15s both; }
-    .card:nth-child(2) { animation: fadeUp 0.5s ease 0.22s both; }
-    .card:nth-child(3) { animation: fadeUp 0.5s ease 0.29s both; }
-    .card:nth-child(4) { animation: fadeUp 0.5s ease 0.36s both; }
-    .card:nth-child(5) { animation: fadeUp 0.5s ease 0.43s both; }
+    header                 { animation: fadeUp 0.5s ease both; }
+    .section-label         { animation: fadeUp 0.5s ease 0.1s both; }
+    .card:nth-child(1)     { animation: fadeUp 0.5s ease 0.15s both; }
+    .card:nth-child(2)     { animation: fadeUp 0.5s ease 0.22s both; }
+    .card:nth-child(3)     { animation: fadeUp 0.5s ease 0.29s both; }
+    .card:nth-child(4)     { animation: fadeUp 0.5s ease 0.36s both; }
+    .card:nth-child(5)     { animation: fadeUp 0.5s ease 0.43s both; }
+    .card:nth-child(6)     { animation: fadeUp 0.5s ease 0.50s both; }
   </style>
 </head>
 <body>
@@ -363,18 +349,18 @@
   <div class="section-label">數學教具</div>
   <div class="cards">
 
-    <a href="math.html" class="card card-math">
-      <span class="card-badge">Gemini 2.5 Flash</span>
+    <a href="math.html" class="card card-math1">
+      <span class="card-badge">Gemini · 拖曳版</span>
       <span class="card-icon">🧱</span>
-      <div class="card-title">積木解題工具<br><small style="font-size:0.75rem;font-weight:400;color:#7a6e64;">標準版</small></div>
+      <div class="card-title">積木解題工具 1</div>
       <div class="card-desc">
-        輸入數學文字題，AI 自動分析並產生積木。
-        學生透過拖曳或輸入數量來分配積木，理解解題邏輯。
-        支援 8 種題型，答對後可顯示完整解題步驟。
+        支援拖曳或輸入兩種操作方式。
+        題型涵蓋和差、周長、移轉、年齡倍數、百分率、倍數分配等，
+        答對後可顯示完整解題步驟。
       </div>
       <div>
-        <span class="tag tag-gemini">Gemini 2.5 Flash</span>
-        <span class="tag tag-gemini">每日 250 次</span>
+        <span class="tag tag-gemini">拖曳積木</span>
+        <span class="tag tag-gemini">多題型</span>
       </div>
       <div class="card-footer">
         <span class="card-file">math.html</span>
@@ -382,39 +368,59 @@
       </div>
     </a>
 
-    <a href="mathl.html" class="card card-mathl">
-      <span class="card-badge">Gemini 2.5 Flash‑Lite</span>
+    <a href="math2.html" class="card card-math2">
+      <span class="card-badge">Gemini · 策略選擇版</span>
       <span class="card-icon">🧱</span>
-      <div class="card-title">積木解題工具<br><small style="font-size:0.75rem;font-weight:400;color:#7a6e64;">高配額版</small></div>
+      <div class="card-title">積木解題工具 2</div>
       <div class="card-desc">
-        功能與標準版完全相同，改用 Flash‑Lite 模型。
-        免費配額更寬鬆，適合課堂多人同時使用，
-        每天可呼叫 API 最多 1,000 次。
+        專注和差類題型，引導學生先選擇解題策略再操作積木。
+        含移轉、年齡和、年齡倍數等題型，
+        部分題型可挑戰兩種不同解法。
       </div>
       <div>
-        <span class="tag tag-free">Flash‑Lite</span>
-        <span class="tag tag-free">每日 1,000 次</span>
+        <span class="tag tag-free">策略選擇</span>
+        <span class="tag tag-free">雙解法</span>
       </div>
       <div class="card-footer">
-        <span class="card-file">mathl.html</span>
+        <span class="card-file">math2.html</span>
         <span class="card-arrow">↗</span>
       </div>
     </a>
 
-    <a href="math3l.html" class="card card-math3l">
-      <span class="card-badge">Gemini 3.1 Flash‑Lite Preview</span>
+    <a href="math3.html" class="card card-math3">
+      <span class="card-badge">Gemini · 完整版</span>
       <span class="card-icon">🧱</span>
-      <div class="card-title">積木解題工具<br><small style="font-size:0.75rem;font-weight:400;color:#7a6e64;">Gemini 3.1 版</small></div>
+      <div class="card-title">積木解題工具 3</div>
       <div class="card-desc">
-        功能與前兩版完全相同，採用最新的 Gemini 3.1 Flash‑Lite Preview 模型。
-        速度比 2.5 Flash 快 2.5 倍，推理能力更強，適合作為教學對照組或測試用途。
+        題型最完整，涵蓋 10 種積木題型加上一般解題模式。
+        新增假設法（雞兔同籠）、比值分配、百分率等，
+        不支援的題型也會直接顯示解題步驟。
       </div>
       <div>
-        <span class="tag tag-new">3.1 Preview</span>
-        <span class="tag tag-new">每日 1,000 次</span>
+        <span class="tag tag-new">10 種題型</span>
+        <span class="tag tag-new">假設法</span>
       </div>
       <div class="card-footer">
-        <span class="card-file">math3l.html</span>
+        <span class="card-file">math3.html</span>
+        <span class="card-arrow">↗</span>
+      </div>
+    </a>
+
+    <a href="math4.html" class="card card-math4">
+      <span class="card-badge">Gemini · 最新版</span>
+      <span class="card-icon">🧱</span>
+      <div class="card-title">積木解題工具 4</div>
+      <div class="card-desc">
+        在工具 3 的基礎上優化移轉題的視覺呈現，
+        答對後以多排積木圖清楚顯示移前、移後的對照，
+        並加強答案算式說明。
+      </div>
+      <div>
+        <span class="tag tag-v4">移轉題強化</span>
+        <span class="tag tag-v4">視覺優化</span>
+      </div>
+      <div class="card-footer">
+        <span class="card-file">math4.html</span>
         <span class="card-arrow">↗</span>
       </div>
     </a>
