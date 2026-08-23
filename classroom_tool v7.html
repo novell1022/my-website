@@ -5,11 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>課堂管理工具</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+<!-- Firebase SDK (compat v9)，與班級自治小黑板共用同一個 Firebase 專案 -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <style>
+:root{--wbody-alpha:0.97;}
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{width:100%;height:100%;overflow:hidden;font-family:'Segoe UI',system-ui,sans-serif}
 
-.screen{width:100%;height:100vh;position:relative;overflow:hidden;background:#4a7c59}
+.screen{width:100%;height:100vh;position:relative;overflow:hidden;background:#2c3e50}
+#bglayer{position:absolute;inset:0;z-index:0;background-size:cover;background-position:center;background-color:#4a7c59;transition:opacity .2s;opacity:1}
 .screen-title{position:absolute;top:10px;left:14px;font-size:13px;font-weight:600;color:rgba(255,255,255,0.4);letter-spacing:1px;pointer-events:none;z-index:1;user-select:none}
 
 .toolbar{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);background:rgba(255,255,255,0.93);border-radius:18px;padding:5px 10px;display:flex;align-items:center;gap:3px;z-index:100;white-space:nowrap}
@@ -19,12 +25,18 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'Segoe UI',system-u
 .tb-btn i{font-size:17px}
 .tb-sep{width:1px;height:30px;background:rgba(0,0,0,0.1);margin:0 2px}
 
+.acctbar{position:absolute;top:10px;right:14px;z-index:110;display:flex;align-items:center;gap:6px}
+.acct-chip{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,0.93);border-radius:16px;padding:4px 10px;font-size:11px;font-weight:600;color:#555;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,0.15)}
+.acct-chip img{width:18px;height:18px;border-radius:50%}
+.acct-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.acct-dot.synced{background:#38f9d7}.acct-dot.syncing{background:#feca57}.acct-dot.error{background:#e74c3c}
+
 .wwin{position:absolute;border-radius:16px;z-index:10;border:2px solid rgba(255,255,255,0.85);display:flex;flex-direction:column;overflow:hidden;container-type:size}
 .whead{display:flex;align-items:center;padding:8px 11px 7px;cursor:move;gap:6px;flex-shrink:0}
 .wtitle{font-size:12px;font-weight:600;flex:1;color:#fff}
 .wclose{background:rgba(255,255,255,0.7);border:none;cursor:pointer;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#555;flex-shrink:0;font-size:12px}
 .wclose:hover{background:#fff;color:#c0392b}
-.wbody{padding:10px 12px 12px;background:rgba(255,255,255,0.97);flex:1;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;gap:7px;min-height:0}
+.wbody{padding:10px 12px 12px;background:rgba(255,255,255,var(--wbody-alpha));flex:1;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;gap:7px;min-height:0;backdrop-filter:blur(2px)}
 .resize-handle{position:absolute;bottom:0;right:0;width:20px;height:20px;cursor:se-resize;display:flex;align-items:flex-end;justify-content:flex-end;padding:3px;z-index:20}
 .resize-handle i{font-size:13px;color:rgba(255,255,255,0.5)}
 
@@ -102,6 +114,9 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'Segoe UI',system-u
 .bgup{border:2px dashed #e0e0e0;border-radius:10px;padding:12px;text-align:center;cursor:pointer;color:#aaa;font-size:12px;transition:all 0.15s}
 .bgup:hover{border-color:#667eea;color:#667eea;background:#f8f8ff}
 .bgup i{font-size:22px;display:block;margin-bottom:3px}
+.opacity-row{display:flex;flex-direction:column;gap:3px}
+.opacity-row label{font-size:11px;color:#666;display:flex;justify-content:space-between}
+.opacity-row input[type=range]{width:100%}
 .toast{position:absolute;bottom:60px;left:50%;transform:translateX(-50%);background:#2c3e50;color:#fff;padding:7px 18px;border-radius:9px;font-size:12px;opacity:0;transition:opacity 0.3s;pointer-events:none;z-index:999;white-space:nowrap}
 .toast.show{opacity:1}
 .clock-mode-btns{display:flex;gap:5px;justify-content:center;flex-shrink:0}
@@ -109,12 +124,40 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'Segoe UI',system-u
 .cmbtn.active{background:linear-gradient(135deg,#f093fb,#f5576c);color:#fff;border-color:transparent}
 .analog-wrap{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:0;gap:4px}
 .analog-canvas{display:block}
+.gconf{display:flex;flex-direction:column;gap:6px;flex-shrink:0;background:#f8f8ff;border-radius:10px;padding:8px}
+.gconf-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.gconf-row label{font-size:11px;color:#666}
+.gconf-row select,.gconf-row input[type=number]{font-size:11px;padding:3px 6px;border:1.5px solid #e0e0e0;border-radius:6px;background:#fff;font-family:inherit}
+.gmember-row{display:flex;align-items:center;justify-content:space-between;gap:4px;padding:1px 0}
+.gmember-row select{font-size:9px;border-radius:5px;border:1px solid #ddd;padding:1px 2px}
+.ghist-item{font-size:10px;color:#0c8599;background:#e3fafc;border-left:3px solid #15aabf;border-radius:6px;padding:5px 7px;margin-bottom:4px}
+.gender-badge{position:absolute;top:-3px;left:-3px;width:16px;height:16px;border-radius:50%;font-size:9px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#fff;font-weight:700;box-shadow:0 1px 3px rgba(0,0,0,0.3)}
+.login-card{background:#fff;border-radius:18px;padding:26px;width:300px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px}
+.login-icon{width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#4facfe,#00f2fe);display:flex;align-items:center;justify-content:center;color:#fff;font-size:26px}
+.gsignin-btn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:10px;border-radius:10px;border:1.5px solid #e0e0e0;background:#fff;font-family:inherit;font-size:13px;font-weight:600;color:#444;cursor:pointer;transition:all .15s}
+.gsignin-btn:hover{background:#f8f8ff}
 </style>
 </head>
 <body>
 <div class="screen" id="screen">
+  <div id="bglayer"></div>
   <div class="screen-title">課堂管理工具</div>
   <div id="wcon"></div>
+
+  <div class="acctbar" id="acctbar" style="display:none"></div>
+
+  <div class="modal-bg" id="login-modal" style="display:none">
+    <div class="login-card">
+      <div class="login-icon"><i class="ti ti-cloud"></i></div>
+      <div style="font-size:15px;font-weight:700;color:#2c3e50">雲端登入</div>
+      <div style="font-size:11px;color:#999">登入後，設定與分組紀錄會同步到雲端，換裝置也能還原</div>
+      <button class="gsignin-btn" onclick="fbSignIn()">
+        <svg width="16" height="16" viewBox="0 0 48 48"><path fill="#4285F4" d="M45.5 24.6c0-1.6-.1-3.1-.4-4.6H24v8.7h12.1c-.5 2.8-2.1 5.1-4.5 6.7v5.6h7.3c4.3-3.9 6.6-9.7 6.6-16.4z"/><path fill="#34A853" d="M24 46c6.5 0 11.9-2.1 15.9-5.8l-7.3-5.6c-2.1 1.4-4.7 2.2-8.6 2.2-6.6 0-12.2-4.5-14.2-10.5H2.2v5.8C6.2 41.5 14.5 46 24 46z"/><path fill="#FBBC05" d="M9.8 26.3A14.5 14.5 0 0 1 9.8 21.7v-5.8H2.2A23.9 23.9 0 0 0 .1 24c0 3.9.9 7.5 2.1 10.8l7.6-8.5z"/><path fill="#EA4335" d="M24 9.5c3.7 0 7 1.3 9.6 3.8l7.2-7.2C36.9 2.1 31.5 0 24 0 14.5 0 6.2 4.5 2.2 11.2l7.6 5.8C11.8 11 17.4 9.5 24 9.5z"/></svg>
+        使用 Google 帳號登入
+      </button>
+      <button class="mbtn cancel" style="width:100%" onclick="skipLogin()">先不登入，僅用本機儲存</button>
+    </div>
+  </div>
 
   <div class="modal-bg" id="batch-modal" style="display:none">
     <div class="mbox">
@@ -151,6 +194,14 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'Segoe UI',system-u
         <i class="ti ti-upload"></i>上傳自己的圖片
         <input type="file" id="bgfile" accept="image/*" style="display:none" onchange="uploadBg(event)">
       </div>
+      <div class="opacity-row">
+        <label><span>背景圖片透明度</span><span id="bgop-val">100%</span></label>
+        <input type="range" id="bgopacity" min="10" max="100" value="100" oninput="onBgOpacityInput(this.value)">
+      </div>
+      <div class="opacity-row">
+        <label><span>小工具底色透明度</span><span id="wbop-val">97%</span></label>
+        <input type="range" id="wbodyalpha" min="15" max="100" value="97" oninput="onWbodyAlphaInput(this.value)">
+      </div>
       <div class="mbtns">
         <button class="mbtn cancel" onclick="document.getElementById('bgmodal').style.display='none'">取消</button>
         <button class="mbtn ok" onclick="applyBg()">套用</button>
@@ -159,7 +210,7 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'Segoe UI',system-u
   </div>
 
   <div class="toolbar">
-    <button class="tb-btn" onclick="document.getElementById('bgmodal').style.display='flex'"><i class="ti ti-photo"></i>背景</button>
+    <button class="tb-btn" onclick="openBgModal()"><i class="ti ti-photo"></i>背景</button>
     <div class="tb-sep"></div>
     <button class="tb-btn" id="tb-timer" onclick="toggleW('timer')"><i class="ti ti-hourglass"></i>計時器</button>
     <button class="tb-btn" id="tb-clock" onclick="toggleW('clock')"><i class="ti ti-clock"></i>時鐘</button>
@@ -174,8 +225,31 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'Segoe UI',system-u
 </div>
 
 <script>
+// ─── Firebase 設定（與班級自治小黑板 index.html 共用同一個專案） ──
+const FB_CONFIG = {
+  apiKey:            "AIzaSyBAjAAklC11qZJ2Web1cSrvRYlFT7zBeDM",
+  authDomain:        "class-blackboard-83477.firebaseapp.com",
+  databaseURL:       "https://class-blackboard-83477-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId:         "class-blackboard-83477",
+  storageBucket:     "class-blackboard-83477.firebasestorage.app",
+  messagingSenderId: "220112790935",
+  appId:             "1:220112790935:web:19d648986484e6e18850d2"
+};
+const ALLOWED_EMAIL = "novell1022@st.tc.edu.tw";
+const FB_READY = typeof firebase !== 'undefined';
+let fbAuth=null, fbDb=null, fbUser=null, fbSyncTimer=null;
+if (FB_READY) {
+  try { firebase.initializeApp(FB_CONFIG); fbAuth=firebase.auth(); fbDb=firebase.database(); }
+  catch(e){ console.warn('Firebase init error:', e); }
+}
+
 const SK='cs_v7';
-let S={names:[],teams:[{name:'第一組',score:0},{name:'第二組',score:0}],todos:[],timerSecs:300,open:{},pos:{},sizes:{},bg:'',photos:{},clockMode:'digital',todoFontSize:16};
+let S={
+  names:[], teams:[{name:'第一組',score:0},{name:'第二組',score:0}], todos:[],
+  timerSecs:300, open:{}, pos:{}, sizes:{}, bg:'', photos:{}, clockMode:'digital', todoFontSize:16,
+  bgOpacity:1, wbodyAlpha:0.97, genders:{}, groupMode:'count', groupNum:4, groupSize:3,
+  groupBalance:false, currentGroups:[], groupHistory:[]
+};
 let timerInt=null,timerOn=false,timerLeft=300,pickedArr=[],pendingBg='',clockMode='digital',analogInt=null,todoFontSize=16;
 
 const BGTINTS=[
@@ -189,7 +263,7 @@ const WDEFS={
   timer: {label:'計時器',icon:'hourglass',cls:'wt-timer',def:{top:10,left:10},defW:220,defH:185},
   clock: {label:'時鐘',icon:'clock',cls:'wt-clock',def:{top:10,left:248},defW:200,defH:120},
   random:{label:'隨機點名',icon:'dice',cls:'wt-random',def:{top:150,left:10},defW:300,defH:330},
-  group: {label:'分組工具',icon:'users-group',cls:'wt-group',def:{top:10,left:460},defW:255,defH:235},
+  group: {label:'分組工具',icon:'users-group',cls:'wt-group',def:{top:10,left:460},defW:290,defH:380},
   score: {label:'記分板',icon:'trophy',cls:'wt-score',def:{top:148,left:325},defW:245,defH:245},
   todo:  {label:'課堂指示',icon:'list-check',cls:'wt-todo',def:{top:148,left:580},defW:240,defH:245},
 };
@@ -198,15 +272,83 @@ const COLORS=['#FF6B6B','#4ECDC4','#45B7D1','#96CEB4','#FECA57','#FF9FF3','#48DB
 function getColor(n){let h=0;for(let i=0;i<n.length;i++)h=n.charCodeAt(i)+((h<<5)-h);return COLORS[Math.abs(h)%COLORS.length];}
 function getInit(n){return n.slice(0,1);}
 function showT(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
+function shuffleArr(a){a=[...a];for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
 
-function load(){
-  try{const d=JSON.parse(localStorage.getItem(SK)||'{}');
-    if(d.names)S.names=d.names;if(d.teams)S.teams=d.teams;if(d.todos)S.todos=d.todos;
-    if(d.timerSecs){S.timerSecs=d.timerSecs;timerLeft=d.timerSecs;}
-    if(d.open)S.open=d.open;if(d.pos)S.pos=d.pos;if(d.sizes)S.sizes=d.sizes;
-    if(d.bg)S.bg=d.bg;if(d.photos)S.photos=d.photos;if(d.clockMode){S.clockMode=d.clockMode;clockMode=d.clockMode;}if(d.todoFontSize){S.todoFontSize=d.todoFontSize;todoFontSize=d.todoFontSize;}
-  }catch(e){}
-  if(S.bg)applyBgDirect(S.bg);
+// ─── 開機流程：先處理登入狀態，再載入資料 ──────────────────────
+function boot(){
+  if (!FB_READY || !fbAuth) { finishLoad(); return; }
+  fbAuth.onAuthStateChanged(async user => {
+    if (user) {
+      if (user.email !== ALLOWED_EMAIL) {
+        fbAuth.signOut();
+        showLoginModal();
+        return;
+      }
+      console.log('【設定用】您的 Firebase UID：', user.uid);
+      fbUser = user;
+      hideLoginModal();
+      renderAcctBar();
+      try {
+        const snap = await fbDb.ref('classroom_tool/'+user.uid).get();
+        if (snap.exists()) Object.assign(S, snap.val());
+      } catch(e) { console.error(e); }
+      finishLoad();
+    } else {
+      fbUser = null;
+      renderAcctBar();
+      // 沒有登入也可以先用本機資料，不強迫登入才能用
+      finishLoad();
+      showLoginModal();
+    }
+  });
+}
+function showLoginModal(){ document.getElementById('login-modal').style.display='flex'; }
+function hideLoginModal(){ document.getElementById('login-modal').style.display='none'; }
+function skipLogin(){ document.getElementById('login-modal').style.display='none'; }
+function fbSignIn(){
+  if(!fbAuth) return;
+  fbAuth.signInWithPopup(new firebase.auth.GoogleAuthProvider())
+    .then(result=>{
+      if(result.user.email !== ALLOWED_EMAIL){
+        fbAuth.signOut();
+        alert(`此帳號（${result.user.email}）未獲授權。\n請用 ${ALLOWED_EMAIL} 登入。`);
+      }
+    })
+    .catch(e=>alert('登入失敗：'+e.message));
+}
+function fbSignOutFn(){ if(fbAuth) fbAuth.signOut().then(()=>{ fbUser=null; renderAcctBar(); }); }
+function renderAcctBar(){
+  const el=document.getElementById('acctbar'); if(!el) return;
+  if(fbUser){
+    el.style.display='flex';
+    el.innerHTML = `<div class="acct-chip" onclick="fbSignOutFn()" title="點擊登出 ${fbUser.email}">
+      <span class="acct-dot synced"></span>
+      ${fbUser.photoURL?`<img src="${fbUser.photoURL}">`:''}
+      <span>已同步雲端</span>
+    </div>`;
+  } else {
+    el.style.display='flex';
+    el.innerHTML = `<div class="acct-chip" onclick="showLoginModal()" title="登入以同步到雲端">
+      <span class="acct-dot" style="background:#ccc"></span><span>僅本機（點擊登入雲端）</span>
+    </div>`;
+  }
+}
+
+function finishLoad(){
+  // 已登入雲端時，S 在 boot() 已經讀到雲端資料，不再用本機 localStorage 覆蓋；
+  // 未登入（或登入前）時，才用本機 localStorage 補上資料。
+  if(!fbUser){
+    try{const d=JSON.parse(localStorage.getItem(SK)||'{}'); Object.assign(S,d);}catch(e){}
+  }
+  if(S.timerSecs) timerLeft = S.timerSecs;
+  if(S.clockMode) clockMode = S.clockMode;
+  if(S.todoFontSize) todoFontSize = S.todoFontSize;
+  if(!S.genders) S.genders = {};
+  if(!S.currentGroups) S.currentGroups = [];
+  if(!S.groupHistory) S.groupHistory = [];
+  applyBgDirect(S.bg||'');
+  document.getElementById('bglayer').style.opacity = (S.bgOpacity??1);
+  document.documentElement.style.setProperty('--wbody-alpha', S.wbodyAlpha??0.97);
   buildBgPresets();
   Object.keys(S.open).forEach(id=>{if(S.open[id])addW(id);});
   updateTb();startClock();
@@ -215,7 +357,17 @@ function load(){
 function saveAll(){
   S.timerSecs=timerLeft;S.clockMode=clockMode;S.todoFontSize=todoFontSize;
   Object.keys(WDEFS).forEach(id=>{const el=document.getElementById('w-'+id);if(el){S.pos[id]={top:parseInt(el.style.top)||0,left:parseInt(el.style.left)||0};S.sizes[id]={w:el.offsetWidth,h:el.offsetHeight};}});
-  try{localStorage.setItem(SK,JSON.stringify(S));showT('設定已儲存！');}catch(e){showT('儲存失敗（照片太大）');}
+  try{localStorage.setItem(SK,JSON.stringify(S));}catch(e){showT('本機儲存失敗（照片太大）');return;}
+  if(fbUser && fbDb){
+    clearTimeout(fbSyncTimer);
+    fbSyncTimer=setTimeout(()=>{
+      fbDb.ref('classroom_tool/'+fbUser.uid).set(S)
+        .then(()=>showT('已儲存（本機＋雲端）'))
+        .catch(e=>{console.error(e);showT('已儲存本機，雲端同步失敗');});
+    }, 300);
+  } else {
+    showT('設定已儲存（僅本機，登入可同步雲端）');
+  }
 }
 
 function toggleW(id){if(S.open[id]){closeW(id);}else{S.open[id]=true;addW(id);}updateTb();}
@@ -235,7 +387,6 @@ function addW(id){
   makeDrag(el);makeResize(el);
   if(id==='clock'){
     tickClock();setTimeout(tickClock,80);
-    // Redraw on resize
     const wrap=document.getElementById('clock-analog-wrap');
     if(wrap&&window.ResizeObserver){
       const ro=new ResizeObserver(()=>{ if(clockMode!=='digital') drawAnalog(new Date()); });
@@ -258,9 +409,24 @@ function buildW(id){
 
   if(id==='clock')return hdr+`<div class="wbody" style="padding:6px 8px 8px;gap:4px;overflow:hidden"><div class="clock-mode-btns"><button class="cmbtn${clockMode==='digital'?' active':''}" onclick="setClockMode('digital')">數字</button><button class="cmbtn${clockMode==='analog'?' active':''}" onclick="setClockMode('analog')">指針</button><button class="cmbtn${clockMode==='both'?' active':''}" onclick="setClockMode('both')">指針+數字</button></div><div id="clock-analog-wrap" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:0;overflow:hidden;width:100%"><canvas id="analog-clock" style="display:${clockMode==='digital'?'none':'block'}"></canvas><div class="ctime" id="ctime" style="${clockMode==='analog'?'display:none':''}">--:--:--</div></div><div class="cdate" id="cdate" style="text-align:center;flex-shrink:0"></div></div>`+rsz;
 
-  if(id==='random')return hdr+`<div class="wbody"><div class="nadd"><input id="ninput" placeholder="輸入姓名後 Enter 新增" onkeydown="if(event.key==='Enter')addStudent()"><button class="xbtn gray" style="padding:5px 8px;font-size:11px;white-space:nowrap" onclick="document.getElementById('batch-modal').style.display='flex'"><i class="ti ti-list"></i> 批次姓名</button><button class="xbtn gray" style="padding:5px 8px;font-size:11px;white-space:nowrap" onclick="document.getElementById('photo-modal').style.display='flex'"><i class="ti ti-photo"></i> 批次照片</button></div><div class="stud-grid" id="sgrid"></div><div class="rand-btns"><button class="xbtn go" style="flex:1" onclick="pickRandom()"><i class="ti ti-shuffle"></i> 隨機抽選</button><button class="xbtn gray" onclick="clearPicked()">重置</button></div><div id="pdisplay"></div></div>`+rsz;
+  if(id==='random')return hdr+`<div class="wbody"><div class="nadd"><input id="ninput" placeholder="輸入姓名後 Enter 新增" onkeydown="if(event.key==='Enter')addStudent()"><button class="xbtn gray" style="padding:5px 8px;font-size:11px;white-space:nowrap" onclick="document.getElementById('batch-modal').style.display='flex'"><i class="ti ti-list"></i> 批次姓名</button><button class="xbtn gray" style="padding:5px 8px;font-size:11px;white-space:nowrap" onclick="document.getElementById('photo-modal').style.display='flex'"><i class="ti ti-photo"></i> 批次照片</button></div><div class="mhint">點頭像左上角圓點可標記性別（分組工具可依性別平均分配）</div><div class="stud-grid" id="sgrid"></div><div class="rand-btns"><button class="xbtn go" style="flex:1" onclick="pickRandom()"><i class="ti ti-shuffle"></i> 隨機抽選</button><button class="xbtn gray" onclick="clearPicked()">重置</button></div><div id="pdisplay"></div></div>`+rsz;
 
-  if(id==='group')return hdr+`<div class="wbody"><div class="gset"><label>每組</label><input type="number" id="gsize" min="1" max="20" value="3"><label>人</label><button class="xbtn go" style="margin-left:auto;padding:5px 10px" onclick="makeGroups()"><i class="ti ti-git-branch"></i> 分組</button></div><div class="gchips" id="gchips"><span style="font-size:11px;color:#aaa">請先在點名中建立名單</span></div></div>`+rsz;
+  if(id==='group')return hdr+`<div class="wbody">
+      <div class="gconf">
+        <div class="gconf-row">
+          <label><input type="radio" name="gmode" value="count" ${S.groupMode!=='size'?'checked':''} onchange="setGroupMode('count')"> 依組數</label>
+          <input type="number" id="gcount" min="1" max="20" value="${S.groupNum}" style="width:48px" ${S.groupMode==='size'?'disabled':''} onchange="S.groupNum=Math.max(1,parseInt(this.value)||1)">
+          <label><input type="radio" name="gmode" value="size" ${S.groupMode==='size'?'checked':''} onchange="setGroupMode('size')"> 依每組人數</label>
+          <input type="number" id="gsize2" min="1" max="20" value="${S.groupSize}" style="width:48px" ${S.groupMode!=='size'?'disabled':''} onchange="S.groupSize=Math.max(1,parseInt(this.value)||1)">
+        </div>
+        <div class="gconf-row">
+          <label><input type="checkbox" id="gbalance" ${S.groupBalance?'checked':''} onchange="S.groupBalance=this.checked"> 依性別平均分配（需先在點名標記性別）</label>
+        </div>
+        <button class="xbtn go" onclick="makeGroups()"><i class="ti ti-git-branch"></i> 產生分組</button>
+      </div>
+      <div class="gchips" id="gchips"></div>
+      <div id="ghistory"></div>
+    </div>`+rsz;
 
   if(id==='score')return hdr+`<div class="wbody"><div class="slist" id="srows"></div><div class="sadd"><input id="newteam" placeholder="新增隊伍名稱" onkeydown="if(event.key==='Enter')addTeam()"><button class="xbtn go" style="padding:5px 8px" onclick="addTeam()"><i class="ti ti-plus"></i></button><button class="xbtn gray" style="padding:5px 8px" onclick="resetScores()"><i class="ti ti-refresh"></i></button></div></div>`+rsz;
 
@@ -310,13 +476,11 @@ function drawAnalog(now){
   const cv=document.getElementById('analog-clock');if(!cv)return;
   const wrap=document.getElementById('clock-analog-wrap');if(!wrap)return;
   const wbody=wrap.closest('.wbody');if(!wbody)return;
-  // Hide canvas first so it doesn't inflate wrap height, then measure
   cv.style.width='0';cv.style.height='0';cv.width=0;cv.height=0;
   const wbodyH=wbody.clientHeight;
   const wbodyW=wbody.clientWidth-16;
   let siblingsH=0;
   Array.from(wbody.children).forEach(n=>{if(n!==wrap)siblingsH+=n.offsetHeight+4;});
-  // Also account for digital time inside wrap (if both mode)
   const dt=document.getElementById('ctime');
   if(dt&&dt.style.display!=='none')siblingsH+=dt.offsetHeight+4;
   const availH=wbodyH-siblingsH-8;
@@ -325,33 +489,26 @@ function drawAnalog(now){
   cv.width=sz;cv.height=sz;cv.style.width=sz+'px';cv.style.height=sz+'px';
   const ctx=cv.getContext('2d');ctx.clearRect(0,0,sz,sz);
   ctx.save();ctx.translate(r,r);
-  // face
   ctx.beginPath();ctx.arc(0,0,r-2,0,Math.PI*2);ctx.fillStyle='#fff';ctx.fill();ctx.strokeStyle='#c8cfe0';ctx.lineWidth=2;ctx.stroke();
-  // tick marks
   for(let i=0;i<60;i++){
     const a=i*Math.PI/30;const isHour=i%5===0;
     const inner=isHour?(r-r*0.18):(r-r*0.09);
     ctx.beginPath();ctx.moveTo(Math.sin(a)*inner,-Math.cos(a)*inner);ctx.lineTo(Math.sin(a)*(r-3),-Math.cos(a)*(r-3));
     ctx.strokeStyle=isHour?'#8899bb':'#ccd';ctx.lineWidth=isHour?2:1;ctx.stroke();
   }
-  // hour numbers 1-12
   const numR=r*0.72;const fontSize=Math.max(9,Math.round(r*0.18));
   ctx.font='bold '+fontSize+'px Segoe UI,system-ui,sans-serif';ctx.fillStyle='#2c3e50';ctx.textAlign='center';ctx.textBaseline='middle';
   for(let i=1;i<=12;i++){const a=(i*Math.PI/6);ctx.fillText(i,Math.sin(a)*numR,-Math.cos(a)*numR);}
   const h=now.getHours()%12,m=now.getMinutes(),s=now.getSeconds();
-  // hour hand
   const ha=(h+m/60)*Math.PI/6;
   ctx.beginPath();ctx.moveTo(-Math.sin(ha)*r*0.12,Math.cos(ha)*r*0.12);ctx.lineTo(Math.sin(ha)*(r*0.50),-Math.cos(ha)*(r*0.50));
   ctx.strokeStyle='#2c3e50';ctx.lineWidth=Math.max(3,r*0.07);ctx.lineCap='round';ctx.stroke();
-  // minute hand
   const ma=(m+s/60)*Math.PI/30;
   ctx.beginPath();ctx.moveTo(-Math.sin(ma)*r*0.12,Math.cos(ma)*r*0.12);ctx.lineTo(Math.sin(ma)*(r*0.68),-Math.cos(ma)*(r*0.68));
   ctx.strokeStyle='#2c3e50';ctx.lineWidth=Math.max(2,r*0.045);ctx.lineCap='round';ctx.stroke();
-  // second hand
   const sa=s*Math.PI/30;
   ctx.beginPath();ctx.moveTo(Math.sin(sa+Math.PI)*(r*0.20),-Math.cos(sa+Math.PI)*(r*0.20));ctx.lineTo(Math.sin(sa)*(r*0.82),-Math.cos(sa)*(r*0.82));
   ctx.strokeStyle='#e74c3c';ctx.lineWidth=Math.max(1.5,r*0.025);ctx.lineCap='round';ctx.stroke();
-  // center dots
   ctx.beginPath();ctx.arc(0,0,Math.max(4,r*0.07),0,Math.PI*2);ctx.fillStyle='#2c3e50';ctx.fill();
   ctx.beginPath();ctx.arc(0,0,Math.max(2,r*0.03),0,Math.PI*2);ctx.fillStyle='#e74c3c';ctx.fill();
   ctx.restore();
@@ -390,11 +547,17 @@ function importBatch(){
   let added=0;names.forEach(n=>{if(!S.names.includes(n)){S.names.push(n);added++;}});
   renderStudents();ta.value='';document.getElementById('batch-modal').style.display='none';showT(`已匯入 ${added} 位學生`);
 }
-function removeStudent(n){S.names=S.names.filter(x=>x!==n);delete S.photos[n];pickedArr=pickedArr.filter(x=>x!==n);renderStudents();renderPicked();}
+function removeStudent(n){S.names=S.names.filter(x=>x!==n);delete S.photos[n];delete S.genders[n];pickedArr=pickedArr.filter(x=>x!==n);renderStudents();}
 function triggerPhotoUpload(name){
   const fi=document.createElement('input');fi.type='file';fi.accept='image/*';
   fi.onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>{S.photos[name]=ev.target.result;renderStudents();};r.readAsDataURL(f);};
   fi.click();
+}
+function toggleGender(e,n){
+  e.stopPropagation();
+  const g=S.genders[n];
+  if(g==='b') S.genders[n]='g'; else if(g==='g') delete S.genders[n]; else S.genders[n]='b';
+  renderStudents();
 }
 function renderStudents(){
   const el=document.getElementById('sgrid');if(!el)return;
@@ -402,7 +565,9 @@ function renderStudents(){
     const ip=pickedArr.includes(n),ph=S.photos[n];
     const av=ph?`<img src="${ph}" alt="${n}">`:`<span>${getInit(n)}</span>`;
     const bg=ph?'':'background:'+getColor(n);
-    return `<div class="stud-card"><div class="stud-avatar${ip?' pr':''}" style="${bg}" onclick="triggerPhotoUpload('${n}')" title="點擊上傳照片">${av}</div><span class="stud-name">${n}</span><button class="stud-del" onclick="removeStudent('${n}')">×</button></div>`;
+    const g=S.genders[n];
+    const gBadge=`<span class="gender-badge" onclick="toggleGender(event,'${n}')" title="點擊切換性別標記（分組工具用）" style="background:${g==='b'?'#4facfe':g==='g'?'#ff9ff3':'#bbb'}">${g==='b'?'♂':g==='g'?'♀':'?'}</span>`;
+    return `<div class="stud-card"><div class="stud-avatar${ip?' pr':''}" style="${bg};position:relative" onclick="triggerPhotoUpload('${n}')" title="點擊上傳照片">${av}${gBadge}</div><span class="stud-name">${n}</span><button class="stud-del" onclick="removeStudent('${n}')">×</button></div>`;
   }).join('');
 }
 function pickRandom(){const avail=S.names.filter(n=>!pickedArr.includes(n));if(!avail.length){showT('所有同學都抽過了！');return;}const p=avail[Math.floor(Math.random()*avail.length)];pickedArr.push(p);renderStudents();renderPicked(p);}
@@ -415,8 +580,65 @@ function renderPicked(name){
   el.innerHTML=`<div class="pdisplay"><div class="pav" style="${bg}">${av}</div><div class="pname">${name}</div><div class="phint">剩 ${S.names.length-pickedArr.length} 人未抽</div></div>`;
 }
 
-function makeGroups(){if(!S.names.length){showT('請先在點名中建立名單');return;}const sz=parseInt(document.getElementById('gsize')?.value)||3;const sh=[...S.names].sort(()=>Math.random()-0.5);const gs=[];for(let i=0;i<sh.length;i+=sz)gs.push(sh.slice(i,i+sz));renderGroups(gs);}
-function renderGroups(gs){const el=document.getElementById('gchips');if(!el)return;if(!gs||!gs.length){el.innerHTML='<span style="font-size:11px;color:#aaa">請先在點名中建立名單</span>';return;}el.innerHTML=gs.map((g,i)=>`<div class="gchip"><div class="gchip-h">第 ${i+1} 組</div><div class="gchip-n">${g.join('、')}</div></div>`).join('');}
+// ─── 分組工具（可設條件／手動編輯／保留歷史紀錄） ────────────────
+function setGroupMode(m){
+  S.groupMode=m;
+  const w=document.getElementById('w-group');if(!w)return;
+  const gc=w.querySelector('#gcount'), gs=w.querySelector('#gsize2');
+  if(gc) gc.disabled = (m!=='count');
+  if(gs) gs.disabled = (m!=='size');
+}
+function computeGroupCount(){
+  if(S.groupMode==='size') return Math.max(1, Math.ceil(S.names.length / Math.max(1,S.groupSize)));
+  return Math.max(1, Math.min(S.groupNum, S.names.length||1));
+}
+function makeGroups(){
+  if(!S.names.length){showT('請先在點名中建立名單');return;}
+  const n=computeGroupCount();
+  const groups=Array.from({length:n},()=>[]);
+  let seq;
+  if(S.groupBalance && S.names.some(nm=>S.genders[nm])){
+    const boys=shuffleArr(S.names.filter(nm=>S.genders[nm]==='b'));
+    const girls=shuffleArr(S.names.filter(nm=>S.genders[nm]==='g'));
+    const others=shuffleArr(S.names.filter(nm=>!S.genders[nm]));
+    seq=[...boys,...girls,...others];
+  } else {
+    seq=shuffleArr(S.names);
+  }
+  seq.forEach((nm,i)=>groups[i%n].push(nm));
+  S.currentGroups=groups;
+  S.groupHistory.unshift({time:new Date().toLocaleString('zh-TW',{hour12:false}), groups:groups.map(g=>[...g])});
+  if(S.groupHistory.length>8) S.groupHistory.pop();
+  renderGroups();
+  showT('已產生新分組（記得按下方「儲存」保留紀錄）');
+}
+function moveMember(name, fromIdx, toIdx){
+  toIdx=parseInt(toIdx,10);
+  if(isNaN(toIdx)||toIdx===fromIdx)return;
+  S.currentGroups[fromIdx]=S.currentGroups[fromIdx].filter(x=>x!==name);
+  if(!S.currentGroups[toIdx])S.currentGroups[toIdx]=[];
+  S.currentGroups[toIdx].push(name);
+  renderGroups();
+}
+function renderGroups(){
+  const el=document.getElementById('gchips');if(!el)return;
+  const groups=S.currentGroups||[];
+  if(!groups.length){el.innerHTML='<span style="font-size:11px;color:#aaa">設定好條件後按「產生分組」</span>';renderGroupHistory();return;}
+  el.innerHTML=groups.map((g,i)=>`<div class="gchip"><div class="gchip-h">第 ${i+1} 組（${g.length}人）</div><div class="gchip-n">${
+    g.map(nm=>{
+      const gd=S.genders[nm];
+      return `<div class="gmember-row"><span>${nm}${gd==='b'?' ♂':gd==='g'?' ♀':''}</span><select onchange="moveMember('${nm}',${i},this.value)">${groups.map((_,gi)=>`<option value="${gi}" ${gi===i?'selected':''}>${gi+1}組</option>`).join('')}</select></div>`;
+    }).join('')
+  }</div></div>`).join('');
+  renderGroupHistory();
+}
+function renderGroupHistory(){
+  const el=document.getElementById('ghistory');if(!el)return;
+  const hist=(S.groupHistory||[]).slice(1);
+  if(!hist.length){el.innerHTML='';return;}
+  el.innerHTML='<div style="font-size:10px;font-weight:700;color:#888;margin:4px 0 3px">📜 歷史紀錄</div>'+
+    hist.map(h=>`<div class="ghist-item"><div style="color:#888">${h.time}</div>${h.groups.map((g,i)=>`<b>G${i+1}</b>:${g.join('、')}`).join(' ｜ ')}</div>`).join('');
+}
 
 function addTeam(){const inp=document.getElementById('newteam');if(!inp)return;const v=inp.value.trim();if(!v)return;S.teams.push({name:v,score:0});renderTeams();inp.value='';}
 function chScore(i,d){S.teams[i].score+=d;renderTeams();}
@@ -433,10 +655,19 @@ function renderTodos(){const el=document.getElementById('titems');if(!el)return;
 function buildBgPresets(){const el=document.getElementById('bgpresets');if(!el)return;el.innerHTML=BGTINTS.map(b=>`<div class="bgp${S.bg===b.css?' active':''}" style="background:${b.css}" onclick="selectBg(this,'${b.css.replace(/'/g,"\\'")}')"></div>`).join('');}
 function selectBg(el,css){pendingBg=css;document.querySelectorAll('.bgp').forEach(e=>e.classList.remove('active'));el.classList.add('active');}
 function applyBg(){if(pendingBg){S.bg=pendingBg;applyBgDirect(pendingBg);}document.getElementById('bgmodal').style.display='none';}
-function applyBgDirect(css){const sc=document.getElementById('screen');sc.style.background=(css.startsWith('data:')||css.startsWith('http'))?`#333 url('${css}') center/cover no-repeat`:css;}
+function applyBgDirect(css){const layer=document.getElementById('bglayer');if(!css){layer.style.background='';return;}layer.style.background=(css.startsWith('data:')||css.startsWith('http'))?`url('${css}') center/cover no-repeat`:css;}
 function uploadBg(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>{pendingBg=ev.target.result;const pa=document.getElementById('bgpresets');document.querySelectorAll('.bgp').forEach(el=>el.classList.remove('active'));const p=document.createElement('div');p.className='bgp active';p.style.background=`url('${ev.target.result}') center/cover`;p.onclick=()=>selectBg(p,ev.target.result);pa.insertBefore(p,pa.firstChild);};r.readAsDataURL(f);}
+function openBgModal(){
+  document.getElementById('bgopacity').value=Math.round((S.bgOpacity??1)*100);
+  document.getElementById('bgop-val').textContent=Math.round((S.bgOpacity??1)*100)+'%';
+  document.getElementById('wbodyalpha').value=Math.round((S.wbodyAlpha??0.97)*100);
+  document.getElementById('wbop-val').textContent=Math.round((S.wbodyAlpha??0.97)*100)+'%';
+  document.getElementById('bgmodal').style.display='flex';
+}
+function onBgOpacityInput(v){S.bgOpacity=(+v)/100;document.getElementById('bglayer').style.opacity=S.bgOpacity;document.getElementById('bgop-val').textContent=v+'%';}
+function onWbodyAlphaInput(v){S.wbodyAlpha=(+v)/100;document.documentElement.style.setProperty('--wbody-alpha',S.wbodyAlpha);document.getElementById('wbop-val').textContent=v+'%';}
 
-load();
+boot();
 </script>
 </body>
 </html>
