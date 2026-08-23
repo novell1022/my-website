@@ -502,6 +502,7 @@ const GuestApp = () => {
   const [activeDate,   setActiveDate  ] = useState(new Date());
   const [loading,      setLoading     ] = useState(true);
   const [loadError,    setLoadError   ] = useState('');
+  const [guestTab,     setGuestTab    ] = useState('attendance'); // 手機版分頁：'attendance' | 'notice'
 
   useEffect(() => {
     if (!FB_READY || !fbDb || UID_NOT_SET) return;
@@ -541,14 +542,6 @@ const GuestApp = () => {
     status:'idle', arrivalTime:null, brushing:false, homework:{},
     ...(dailyRecords[curDateKey]?.[sid] || {})
   });
-  const gridCols = () => {
-    const n = students.length;
-    if (!n)    return 'grid-cols-1';
-    if (n<=30) return 'grid-cols-5';
-    if (n<=42) return 'grid-cols-6';
-    if (n<=56) return 'grid-cols-8';
-    return 'grid-cols-10';
-  };
 
   if (UID_NOT_SET) {
     return (
@@ -560,10 +553,24 @@ const GuestApp = () => {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden font-serif">
-      <div className="bg-white border-b-2 border-retro-ink shadow-hard px-4 py-2 flex items-center justify-center z-20 shrink-0 mx-4 mt-4 mb-2 gap-2">
-        <Users className="w-4 h-4 text-retro-ink" strokeWidth={2.5}/>
-        <span className="text-lg font-black text-retro-ink font-serif tracking-widest">{classTitle}</span>
+      <div className="bg-white border-b-2 border-retro-ink shadow-hard px-3 py-2 flex items-center justify-center z-20 shrink-0 mx-2 mt-2 mb-2 gap-2 lg:mx-4 lg:mt-4">
+        <Users className="w-4 h-4 text-retro-ink shrink-0" strokeWidth={2.5}/>
+        <span className="text-base lg:text-lg font-black text-retro-ink font-serif tracking-widest truncate">{classTitle}</span>
       </div>
+
+      {/* 手機/平板專用分頁切換（lg 以上直接左右並排顯示，不需要切換） */}
+      {!loadError && !loading && (
+        <div className="lg:hidden flex gap-2 px-2 mb-1 shrink-0">
+          <button onClick={()=>setGuestTab('attendance')}
+            className={`flex-1 py-2 border-2 font-bold text-sm flex items-center justify-center gap-1.5 transition-colors ${guestTab==='attendance'?'bg-retro-ink text-white border-retro-ink':'bg-white text-retro-ink border-gray-300'}`}>
+            <Users className="w-4 h-4"/> 點名狀況
+          </button>
+          <button onClick={()=>setGuestTab('notice')}
+            className={`flex-1 py-2 border-2 font-bold text-sm flex items-center justify-center gap-1.5 transition-colors ${guestTab==='notice'?'bg-[#263238] text-[#f1c40f] border-[#263238]':'bg-white text-retro-ink border-gray-300'}`}>
+            <Star className="w-4 h-4"/> 聯絡簿
+          </button>
+        </div>
+      )}
 
       {loadError ? (
         <div className="flex-1 flex flex-col items-center justify-center gap-3 text-retro-red text-center px-6">
@@ -577,10 +584,10 @@ const GuestApp = () => {
           <Loader2 className="w-6 h-6 animate-spin"/> 讀取中…
         </div>
       ) : (
-        <div className="flex-1 flex flex-col lg:flex-row overflow-hidden p-4 gap-4">
+        <div className="flex-1 flex flex-col lg:flex-row overflow-hidden p-2 gap-2 lg:p-4 lg:gap-4">
 
           {/* ══ 左欄：點名（唯讀） ══ */}
-          <div className="flex flex-col bg-[#8d6e63] border-4 border-[#5d4037] shadow-2xl relative" style={{flex:1}}>
+          <div className={`${guestTab==='attendance' ? 'flex' : 'hidden'} lg:flex flex-col bg-[#8d6e63] border-4 border-[#5d4037] shadow-2xl relative min-h-0`} style={{flex:1}}>
             <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cork-board.png')] opacity-70 pointer-events-none"></div>
             <div className="flex-none flex flex-col items-center justify-center py-4 border-b-4 border-[#5d4037] shadow-lg bg-[#fcfbf9] relative z-10">
               <div className="flex items-center gap-2">
@@ -592,11 +599,15 @@ const GuestApp = () => {
               </div>
               <div className="text-xs font-black px-3 py-0.5 mt-1.5 border-2 border-retro-ink shadow-hard-sm bg-retro-paper text-retro-ink">點名狀況（僅供查詢）</div>
             </div>
-            <div className="flex-1 p-4 overflow-hidden z-10">
+            <div className="flex-1 p-3 lg:p-4 overflow-y-auto retro-scrollbar z-10 min-h-0">
               {students.length===0 ? (
                 <div className="flex items-center justify-center h-full text-[#5d4037]/50 font-serif text-lg">尚無名冊資料</div>
               ) : (
-                <div className={`grid ${gridCols()} gap-3 h-full`} style={{fontFamily:"'Noto Sans TC',sans-serif", gridAutoRows:'minmax(0,1fr)'}}>
+                <div style={{
+                    fontFamily:"'Noto Sans TC',sans-serif", display:'grid',
+                    gridTemplateColumns:'repeat(auto-fill, minmax(66px, 1fr))',
+                    gridAutoRows:'minmax(66px,1fr)', gap:'8px'
+                  }}>
                   {students.map(s=>(
                     <StudentCard key={s.id} student={s} record={getRecord(s.id)}
                       activeHwItems={[]} mode="attendance" fontFamily="'Noto Sans TC',sans-serif"
@@ -608,27 +619,27 @@ const GuestApp = () => {
           </div>
 
           {/* ══ 右欄：聯絡簿（唯讀） ══ */}
-          <div className="flex flex-col relative shadow-2xl overflow-hidden" style={{flex:1}}>
+          <div className={`${guestTab==='notice' ? 'flex' : 'hidden'} lg:flex flex-col relative shadow-2xl overflow-hidden min-h-0`} style={{flex:1}}>
             <div className="absolute inset-0 border-[16px] border-[#3e2723] pointer-events-none z-20 shadow-[inset_0_0_20px_rgba(0,0,0,0.8)]"></div>
             <div className="absolute inset-0 bg-[#263238] z-0">
               <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/black-scales.png')] opacity-30"></div>
               <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-transparent to-white/5 pointer-events-none"></div>
             </div>
-            <div className="relative z-10 flex justify-between items-center p-6 text-gray-200 mt-1">
-              <div className="flex items-center gap-3">
-                <div className="bg-red-600/20 p-2 rounded-full border border-red-500/50">
-                  <Star className="w-5 h-5 text-red-400 fill-red-400/50 animate-pulse"/>
+            <div className="relative z-10 flex justify-between items-center p-3 lg:p-6 text-gray-200 mt-1">
+              <div className="flex items-center gap-2 lg:gap-3 min-w-0">
+                <div className="bg-red-600/20 p-1.5 lg:p-2 rounded-full border border-red-500/50 shrink-0">
+                  <Star className="w-4 h-4 lg:w-5 lg:h-5 text-red-400 fill-red-400/50 animate-pulse"/>
                 </div>
-                <h2 className="text-2xl font-black font-serif tracking-widest text-[#eceff1] opacity-90" style={{textShadow:'1px 1px 2px black'}}>聯絡事項</h2>
+                <h2 className="text-lg lg:text-2xl font-black font-serif tracking-widest text-[#eceff1] opacity-90 truncate" style={{textShadow:'1px 1px 2px black'}}>聯絡事項</h2>
               </div>
-              <div className="flex items-center gap-2 font-mono text-[#eceff1]">
-                <button onClick={()=>setActiveDate(d=>addDays(d,-1))} className="hover:text-white hover:scale-125 transition-transform p-1"><ChevronLeft className="w-5 h-5"/></button>
-                <span className="border-b-2 border-white/40 px-3 py-0.5 text-sm font-bold">{curDateKey}</span>
-                <button onClick={()=>setActiveDate(d=>addDays(d,1))} className="hover:text-white hover:scale-125 transition-transform p-1"><ChevronRight className="w-5 h-5"/></button>
+              <div className="flex items-center gap-1 lg:gap-2 font-mono text-[#eceff1] shrink-0">
+                <button onClick={()=>setActiveDate(d=>addDays(d,-1))} className="hover:text-white hover:scale-125 transition-transform p-1"><ChevronLeft className="w-4 h-4 lg:w-5 lg:h-5"/></button>
+                <span className="border-b-2 border-white/40 px-2 lg:px-3 py-0.5 text-xs lg:text-sm font-bold whitespace-nowrap">{curDateKey}</span>
+                <button onClick={()=>setActiveDate(d=>addDays(d,1))} className="hover:text-white hover:scale-125 transition-transform p-1"><ChevronRight className="w-4 h-4 lg:w-5 lg:h-5"/></button>
               </div>
             </div>
-            <div className="flex-1 px-8 pb-8 relative overflow-auto z-10 retro-scrollbar">
-              <div className="w-full h-full flex flex-col" style={{fontFamily:"'Noto Sans TC',sans-serif", fontSize:'28px'}}>
+            <div className="flex-1 px-4 pb-4 lg:px-8 lg:pb-8 relative overflow-y-auto z-10 retro-scrollbar min-h-0">
+              <div className="w-full h-full flex flex-col" style={{fontFamily:"'Noto Sans TC',sans-serif", fontSize:'clamp(17px, 4.5vw, 28px)'}}>
                 {noteLines.map((line,idx)=>(
                   <div key={idx} className="flex flex-row items-baseline gap-2 text-white/95 font-medium" style={{lineHeight:1.8, marginBottom:'0.24em'}}>
                     <span className="text-[#f1c40f] font-black font-mono select-none opacity-70 text-[0.65em] shrink-0">{idx+1}.</span>
@@ -681,14 +692,14 @@ const AnnouncementView = () => {
   }
 
   return (
-    <div className="h-screen flex items-center justify-center p-6 font-serif" style={{background:'#1b2226'}}>
-      <div className="w-full max-w-2xl relative shadow-2xl">
-        <div className="absolute inset-0 border-[16px] border-[#3e2723] pointer-events-none z-20 shadow-[inset_0_0_20px_rgba(0,0,0,0.8)]"></div>
-        <div className="relative bg-[#263238] p-10 min-h-[320px] overflow-hidden">
+    <div className="h-screen flex items-center justify-center p-3 lg:p-6 font-serif overflow-y-auto" style={{background:'#1b2226'}}>
+      <div className="w-full max-w-2xl relative shadow-2xl my-auto">
+        <div className="absolute inset-0 border-[8px] lg:border-[16px] border-[#3e2723] pointer-events-none z-20 shadow-[inset_0_0_20px_rgba(0,0,0,0.8)]"></div>
+        <div className="relative bg-[#263238] p-5 lg:p-10 min-h-[240px] lg:min-h-[320px] overflow-hidden">
           <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/black-scales.png')] opacity-30 pointer-events-none"></div>
           <div className="relative z-10">
-            <h2 className="text-2xl font-black tracking-widest text-[#eceff1] opacity-90 mb-6 flex items-center gap-2" style={{textShadow:'1px 1px 2px black'}}>
-              <Megaphone className="w-6 h-6 text-[#f1c40f]"/> 班級公告
+            <h2 className="text-lg lg:text-2xl font-black tracking-widest text-[#eceff1] opacity-90 mb-4 lg:mb-6 flex items-center gap-2" style={{textShadow:'1px 1px 2px black'}}>
+              <Megaphone className="w-5 h-5 lg:w-6 lg:h-6 text-[#f1c40f] shrink-0"/> 班級公告
             </h2>
             {loadError ? (
               <div className="text-rose-300">
@@ -700,7 +711,7 @@ const AnnouncementView = () => {
               <div className="text-white/70 flex items-center gap-2"><Loader2 className="w-5 h-5 animate-spin"/>讀取中…</div>
             ) : (
               <>
-                <div className="text-white/95 whitespace-pre-wrap leading-relaxed text-2xl" style={{textShadow:'1px 1px 0 rgba(0,0,0,0.5)'}}>{text}</div>
+                <div className="text-white/95 whitespace-pre-wrap leading-relaxed" style={{textShadow:'1px 1px 0 rgba(0,0,0,0.5)', fontSize:'clamp(18px, 5vw, 28px)'}}>{text}</div>
                 {updatedAt && <div className="text-white/40 text-xs font-mono mt-6">更新時間：{new Date(updatedAt).toLocaleString('zh-TW')}</div>}
               </>
             )}
