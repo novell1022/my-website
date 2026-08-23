@@ -505,22 +505,33 @@ const GuestApp = () => {
 
   useEffect(() => {
     if (!FB_READY || !fbDb || UID_NOT_SET) return;
-    const ref = fbDb.ref(`classroom/${TEACHER_UID}`);
-    const cb = snap => {
-      const d = snap.val() || {};
-      setStudents(Array.isArray(d.students) ? [...d.students].sort((a,b)=>a.id-b.id) : []);
-      setDailyRecords(d.dailyRecords || {});
-      setNotesData(d.notesData || {});
-      if (d.settings && d.settings.classTitle) setClassTitle(d.settings.classTitle);
-      setLoading(false);
-    };
+    // 注意：Firebase 安全規則是「照請求的路徑」判斷的，子節點的 .read:true
+    // 不會讓上層整包的讀取請求跟著放行，所以這裡要分別讀取每個公開節點，
+    // 不能像教師畫面那樣一次讀整個 classroom/{uid}。
+    const base = `classroom/${TEACHER_UID}`;
+    const paths = ['students', 'dailyRecords', 'notesData', 'settings'];
+    const done = { students:false, dailyRecords:false, notesData:false, settings:false };
+    const refCbs = [];
     const errCb = err => {
       console.error('讀取家長唯讀資料失敗：', err);
       setLoadError(err && err.message ? err.message : String(err));
       setLoading(false);
     };
-    ref.on('value', cb, errCb);
-    return () => ref.off('value', cb);
+    paths.forEach(p => {
+      const ref = fbDb.ref(`${base}/${p}`);
+      const cb = snap => {
+        const v = snap.val();
+        if      (p === 'students')     setStudents(Array.isArray(v) ? [...v].sort((a,b)=>a.id-b.id) : []);
+        else if (p === 'dailyRecords') setDailyRecords(v || {});
+        else if (p === 'notesData')    setNotesData(v || {});
+        else if (p === 'settings')     { if (v && v.classTitle) setClassTitle(v.classTitle); }
+        done[p] = true;
+        if (Object.values(done).every(Boolean)) setLoading(false);
+      };
+      ref.on('value', cb, errCb);
+      refCbs.push([ref, cb]);
+    });
+    return () => refCbs.forEach(([ref, cb]) => ref.off('value', cb));
   }, []);
 
   const curDateKey = toDateKey(activeDate);
