@@ -87,6 +87,12 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'Segoe UI',system-u
 .stud-card{display:flex;flex-direction:column;align-items:center;gap:2px;position:relative}
 .stud-del{position:absolute;top:-2px;right:-2px;background:#e74c3c;color:#fff;border:none;border-radius:50%;width:15px;height:15px;font-size:10px;display:none;align-items:center;justify-content:center;cursor:pointer;line-height:1}
 .stud-card:hover .stud-del{display:flex}
+.stud-seat{position:absolute;top:-3px;left:-3px;background:#4facfe;color:#fff;border:none;border-radius:50%;width:16px;height:16px;font-size:9px;display:flex;align-items:center;justify-content:center;cursor:grab;line-height:1;font-weight:700;z-index:2;user-select:none}
+.stud-seat:active{cursor:grabbing}
+.stud-card.dragging{opacity:0.35}
+.stud-card.drag-over .stud-avatar{outline:2px dashed #4facfe;outline-offset:2px}
+.stud-name[contenteditable="true"]{cursor:text;border-radius:4px;padding:0 2px}
+.stud-name[contenteditable="true"]:focus{background:#fff;box-shadow:0 0 0 1.5px #4facfe;outline:none;white-space:normal;overflow:visible}
 .pdisplay{background:linear-gradient(135deg,#e0f7fa,#b2ebf2);border-radius:10px;padding:8px;text-align:center;flex-shrink:0}
 .gset{display:flex;align-items:center;gap:7px;flex-shrink:0;flex-wrap:wrap}
 .gchips{display:flex;flex-wrap:wrap;gap:7px;flex:1;align-content:flex-start;overflow-y:auto;min-height:0}
@@ -422,9 +428,13 @@ function buildW(id){
         <div class="gconf-row">
           <label><input type="checkbox" id="gbalance" ${S.groupBalance?'checked':''} onchange="S.groupBalance=this.checked"> 依性別平均分配（需先在點名標記性別）</label>
         </div>
-        <button class="xbtn go" onclick="makeGroups()"><i class="ti ti-git-branch"></i> 產生分組</button>
+        <div class="gconf-row" style="gap:6px">
+          <button class="xbtn go" style="flex:1" onclick="makeGroups()"><i class="ti ti-git-branch"></i> 產生分組</button>
+          <button class="xbtn gray" onclick="clearCurrentGroups()" title="清空目前分組（歷史紀錄保留）"><i class="ti ti-eraser"></i></button>
+        </div>
       </div>
       <div class="gchips" id="gchips"></div>
+      <div id="gunassigned"></div>
       <div id="ghistory"></div>
     </div>`+rsz;
 
@@ -547,7 +557,11 @@ function importBatch(){
   let added=0;names.forEach(n=>{if(!S.names.includes(n)){S.names.push(n);added++;}});
   renderStudents();ta.value='';document.getElementById('batch-modal').style.display='none';showT(`已匯入 ${added} 位學生`);
 }
-function removeStudent(n){S.names=S.names.filter(x=>x!==n);delete S.photos[n];delete S.genders[n];pickedArr=pickedArr.filter(x=>x!==n);renderStudents();}
+function removeStudent(n){
+  S.names=S.names.filter(x=>x!==n);delete S.photos[n];delete S.genders[n];pickedArr=pickedArr.filter(x=>x!==n);
+  if(S.currentGroups&&S.currentGroups.length) S.currentGroups=S.currentGroups.map(g=>g.filter(x=>x!==n));
+  renderStudents();renderGroups();
+}
 function triggerPhotoUpload(name){
   const fi=document.createElement('input');fi.type='file';fi.accept='image/*';
   fi.onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>{S.photos[name]=ev.target.result;renderStudents();};r.readAsDataURL(f);};
@@ -559,15 +573,63 @@ function toggleGender(e,n){
   if(g==='b') S.genders[n]='g'; else if(g==='g') delete S.genders[n]; else S.genders[n]='b';
   renderStudents();
 }
+function renameStudent(el,oldName){
+  const v=el.textContent.replace(/\s+/g,' ').trim();
+  if(!v){el.textContent=oldName;return;}
+  if(v===oldName){el.textContent=oldName;return;}
+  if(S.names.includes(v)){showT('已有相同姓名的學生，取消修改');el.textContent=oldName;return;}
+  const idx=S.names.indexOf(oldName);
+  if(idx===-1){el.textContent=oldName;return;}
+  S.names[idx]=v;
+  if(oldName in S.photos){S.photos[v]=S.photos[oldName];delete S.photos[oldName];}
+  if(oldName in S.genders){S.genders[v]=S.genders[oldName];delete S.genders[oldName];}
+  pickedArr=pickedArr.map(x=>x===oldName?v:x);
+  (S.currentGroups||[]).forEach(g=>{const gi=g.indexOf(oldName);if(gi!==-1)g[gi]=v;});
+  renderStudents();renderPicked();renderGroups();
+  showT(`已將「${oldName}」改名為「${v}」`);
+}
+let dragSrcIdx=null;
+function reorderNames(from,to){
+  if(from===to||from<0||to<0||from>=S.names.length||to>=S.names.length)return;
+  const arr=S.names;const moved=arr.splice(from,1)[0];
+  const insertAt=from<to?to-1:to;
+  arr.splice(insertAt,0,moved);
+}
+function studDragStart(e,idx){
+  dragSrcIdx=idx;e.dataTransfer.effectAllowed='move';
+  try{e.dataTransfer.setData('text/plain',String(idx));}catch(err){}
+  const card=e.target.closest('.stud-card');if(card)card.classList.add('dragging');
+}
+function studDragOver(e){e.preventDefault();e.dataTransfer.dropEffect='move';const card=e.currentTarget;if(card)card.classList.add('drag-over');}
+function studDragLeave(e){const card=e.currentTarget;if(card)card.classList.remove('drag-over');}
+function studDrop(e,idx){
+  e.preventDefault();
+  const card=e.currentTarget;if(card)card.classList.remove('drag-over');
+  if(dragSrcIdx===null||dragSrcIdx===idx){dragSrcIdx=null;return;}
+  reorderNames(dragSrcIdx,idx);dragSrcIdx=null;renderStudents();
+}
+function studDragEnd(){
+  document.querySelectorAll('.stud-card.dragging').forEach(c=>c.classList.remove('dragging'));
+  document.querySelectorAll('.stud-card.drag-over').forEach(c=>c.classList.remove('drag-over'));
+  dragSrcIdx=null;
+}
+function promptSeat(idx){
+  const total=S.names.length;
+  const val=prompt(`「${S.names[idx]}」要排到第幾號？（目前共 ${total} 位，輸入 1～${total}）`,String(idx+1));
+  if(val===null)return;
+  let to=parseInt(val,10);if(isNaN(to))return;
+  to=Math.max(1,Math.min(total,to))-1;
+  reorderNames(idx,to);renderStudents();
+}
 function renderStudents(){
   const el=document.getElementById('sgrid');if(!el)return;
-  el.innerHTML=S.names.map(n=>{
+  el.innerHTML=S.names.map((n,i)=>{
     const ip=pickedArr.includes(n),ph=S.photos[n];
     const av=ph?`<img src="${ph}" alt="${n}">`:`<span>${getInit(n)}</span>`;
     const bg=ph?'':'background:'+getColor(n);
     const g=S.genders[n];
     const gBadge=`<span class="gender-badge" onclick="toggleGender(event,'${n}')" title="點擊切換性別標記（分組工具用）" style="background:${g==='b'?'#4facfe':g==='g'?'#ff9ff3':'#bbb'}">${g==='b'?'♂':g==='g'?'♀':'?'}</span>`;
-    return `<div class="stud-card"><div class="stud-avatar${ip?' pr':''}" style="${bg};position:relative" onclick="triggerPhotoUpload('${n}')" title="點擊上傳照片">${av}${gBadge}</div><span class="stud-name">${n}</span><button class="stud-del" onclick="removeStudent('${n}')">×</button></div>`;
+    return `<div class="stud-card" ondragover="studDragOver(event)" ondragleave="studDragLeave(event)" ondrop="studDrop(event,${i})"><span class="stud-seat" draggable="true" ondragstart="studDragStart(event,${i})" ondragend="studDragEnd()" onclick="promptSeat(${i})" title="拖曳排序，或點擊直接輸入座號">${i+1}</span><div class="stud-avatar${ip?' pr':''}" style="${bg};position:relative" onclick="triggerPhotoUpload('${n}')" title="點擊上傳照片">${av}${gBadge}</div><span class="stud-name" contenteditable="true" spellcheck="false" title="點擊可直接修改姓名" onclick="event.stopPropagation()" onblur="renameStudent(this,'${n}')" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">${n}</span><button class="stud-del" onclick="removeStudent('${n}')">×</button></div>`;
   }).join('');
 }
 function pickRandom(){const avail=S.names.filter(n=>!pickedArr.includes(n));if(!avail.length){showT('所有同學都抽過了！');return;}const p=avail[Math.floor(Math.random()*avail.length)];pickedArr.push(p);renderStudents();renderPicked(p);}
@@ -620,16 +682,47 @@ function moveMember(name, fromIdx, toIdx){
   S.currentGroups[toIdx].push(name);
   renderGroups();
 }
+function removeFromGroup(name, idx){
+  if(!S.currentGroups[idx])return;
+  S.currentGroups[idx]=S.currentGroups[idx].filter(x=>x!==name);
+  renderGroups();
+}
+function addToGroup(name){
+  const sel=document.getElementById('gunsel-'+name);if(!sel)return;
+  const idx=parseInt(sel.value,10);
+  if(isNaN(idx)||!S.currentGroups[idx])return;
+  S.currentGroups[idx].push(name);
+  renderGroups();
+}
+function clearCurrentGroups(){
+  if(!S.currentGroups||!S.currentGroups.length){showT('目前沒有分組');return;}
+  if(!confirm('確定要清空目前顯示的分組嗎？（歷史紀錄不會被刪除）'))return;
+  S.currentGroups=[];
+  renderGroups();
+}
 function renderGroups(){
   const el=document.getElementById('gchips');if(!el)return;
   const groups=S.currentGroups||[];
-  if(!groups.length){el.innerHTML='<span style="font-size:11px;color:#aaa">設定好條件後按「產生分組」</span>';renderGroupHistory();return;}
+  const ue=document.getElementById('gunassigned');
+  if(!groups.length){
+    el.innerHTML='<span style="font-size:11px;color:#aaa">設定好條件後按「產生分組」</span>';
+    if(ue)ue.innerHTML='';
+    renderGroupHistory();return;
+  }
   el.innerHTML=groups.map((g,i)=>`<div class="gchip"><div class="gchip-h">第 ${i+1} 組（${g.length}人）</div><div class="gchip-n">${
     g.map(nm=>{
       const gd=S.genders[nm];
-      return `<div class="gmember-row"><span>${nm}${gd==='b'?' ♂':gd==='g'?' ♀':''}</span><select onchange="moveMember('${nm}',${i},this.value)">${groups.map((_,gi)=>`<option value="${gi}" ${gi===i?'selected':''}>${gi+1}組</option>`).join('')}</select></div>`;
+      const stale=!S.names.includes(nm);
+      return `<div class="gmember-row"><span style="${stale?'color:#e74c3c;text-decoration:line-through':''}" title="${stale?'此姓名已不在點名名單中，可移除':''}">${nm}${gd==='b'?' ♂':gd==='g'?' ♀':''}</span><span style="display:flex;align-items:center;gap:2px"><select onchange="moveMember('${nm}',${i},this.value)">${groups.map((_,gi)=>`<option value="${gi}" ${gi===i?'selected':''}>${gi+1}組</option>`).join('')}</select><button class="tdel" title="從此組移除" onclick="removeFromGroup('${nm}',${i})"><i class="ti ti-x"></i></button></span></div>`;
     }).join('')
   }</div></div>`).join('');
+  const unassigned=S.names.filter(nm=>!groups.some(g=>g.includes(nm)));
+  if(ue){
+    ue.innerHTML=unassigned.length?(
+      '<div style="font-size:10px;font-weight:700;color:#888;margin:6px 0 3px">尚未分組</div>'+
+      unassigned.map(nm=>`<div class="gmember-row"><span>${nm}</span><span style="display:flex;align-items:center;gap:2px"><select id="gunsel-${nm}">${groups.map((_,gi)=>`<option value="${gi}">${gi+1}組</option>`).join('')}</select><button class="xbtn go" style="padding:2px 7px;font-size:10px" onclick="addToGroup('${nm}')">加入</button></span></div>`).join('')
+    ):'';
+  }
   renderGroupHistory();
 }
 function renderGroupHistory(){
@@ -637,7 +730,16 @@ function renderGroupHistory(){
   const hist=(S.groupHistory||[]).slice(1);
   if(!hist.length){el.innerHTML='';return;}
   el.innerHTML='<div style="font-size:10px;font-weight:700;color:#888;margin:4px 0 3px">📜 歷史紀錄</div>'+
-    hist.map(h=>`<div class="ghist-item"><div style="color:#888">${h.time}</div>${h.groups.map((g,i)=>`<b>G${i+1}</b>:${g.join('、')}`).join(' ｜ ')}</div>`).join('');
+    hist.map((h,i)=>{
+      const realIdx=i+1;
+      return `<div class="ghist-item"><div style="display:flex;justify-content:space-between;align-items:center;gap:6px"><span style="color:#888">${h.time}</span><button class="tdel" title="刪除這筆歷史紀錄" onclick="deleteGroupHistory(${realIdx})"><i class="ti ti-trash"></i></button></div><div>${h.groups.map((g,gi)=>`<b>G${gi+1}</b>:${g.join('、')}`).join(' ｜ ')}</div></div>`;
+    }).join('');
+}
+function deleteGroupHistory(idx){
+  if(!Array.isArray(S.groupHistory)||idx<0||idx>=S.groupHistory.length)return;
+  if(!confirm('確定要刪除這筆分組歷史紀錄嗎？'))return;
+  S.groupHistory.splice(idx,1);
+  renderGroupHistory();
 }
 
 function addTeam(){const inp=document.getElementById('newteam');if(!inp)return;const v=inp.value.trim();if(!v)return;S.teams.push({name:v,score:0});renderTeams();inp.value='';}
