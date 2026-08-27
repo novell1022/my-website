@@ -61,22 +61,22 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'Segoe UI',system-u
   .ctime{font-size:clamp(20px,22cqw,160px);font-weight:700;text-align:center;color:#2c3e50;letter-spacing:2px;font-variant-numeric:tabular-nums;line-height:1.05}
   .cdate{font-size:clamp(10px,5cqw,28px);color:#888;text-align:center;margin-top:4px}
   .nadd input,.sadd input,.tadd input{flex:1;font-size:clamp(11px,4cqw,18px);padding:5px 9px;border:1.5px solid #e0e0e0;border-radius:9px;background:#f8f8ff;font-family:inherit}
-  .stud-avatar{width:clamp(34px,11cqw,80px);height:clamp(34px,11cqw,80px);border-radius:50%;border:2px solid #e0e0e0;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:clamp(12px,4.5cqw,28px);color:#fff;overflow:hidden;cursor:pointer;flex-shrink:0}
+  .stud-avatar{width:clamp(34px,min(13cqw,20cqh),140px);height:clamp(34px,min(13cqw,20cqh),140px);border-radius:50%;border:2px solid #e0e0e0;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:clamp(12px,min(5.5cqw,8.5cqh),58px);color:#fff;overflow:hidden;cursor:pointer;flex-shrink:0}
   .stud-avatar.pr{border-color:#e74c3c;border-width:3px}
   .stud-avatar img{width:100%;height:100%;object-fit:cover}
-  .stud-name{font-size:clamp(9px,3cqw,16px);color:#555;text-align:center;max-width:clamp(34px,11cqw,80px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .stud-name{font-size:clamp(9px,min(3.8cqw,5.8cqh),26px);color:#555;text-align:center;max-width:clamp(34px,min(13cqw,20cqh),140px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .pav{width:clamp(38px,15cqw,110px);height:clamp(38px,15cqw,110px);border-radius:50%;border:3px solid #00838f;margin:0 auto 4px;display:flex;align-items:center;justify-content:center;font-size:clamp(14px,7cqw,44px);font-weight:700;color:#fff;overflow:hidden}
   .pav img{width:100%;height:100%;object-fit:cover}
   .pname{font-size:clamp(14px,9cqw,52px);font-weight:700;color:#006064}
   .phint{font-size:clamp(10px,4cqw,20px);color:#00838f;margin-top:2px}
   .gset label{font-size:clamp(11px,4cqw,18px);color:#555}
   .gset input{width:clamp(36px,10cqw,64px);text-align:center;font-size:clamp(11px,4cqw,18px);padding:4px;border:1.5px solid #e0e0e0;border-radius:7px;background:#f8f8ff;font-family:inherit}
-  .gchip{padding:clamp(5px,2.5cqw,12px) clamp(7px,3.5cqw,16px);border-radius:10px}
-  .gchip-h{font-size:clamp(9px,3cqw,15px);font-weight:700;color:#555;margin-bottom:3px;letter-spacing:0.4px}
-  .gchip-n{font-size:clamp(10px,4cqw,20px);color:#333;line-height:1.6}
-  .srow input{flex:1;font-size:clamp(11px,4.5cqw,20px);padding:3px 6px;border:1.5px solid #e0e0e0;border-radius:7px;background:#fff;font-family:inherit;min-width:0}
-  .sval{font-size:clamp(16px,8cqw,44px);font-weight:700;min-width:clamp(28px,9cqw,56px);text-align:center;color:#2c3e50}
-  .sbtn{width:clamp(22px,7cqw,42px);height:clamp(22px,7cqw,42px);border-radius:50%;border:none;cursor:pointer;font-size:clamp(13px,5cqw,26px);display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0}
+  .gchip{padding:clamp(5px,min(3.5cqw,5.5cqh),20px) clamp(7px,min(5cqw,8cqh),28px);border-radius:10px}
+  .gchip-h{font-size:clamp(9px,min(4cqw,6cqh),22px);font-weight:700;color:#555;margin-bottom:3px;letter-spacing:0.4px}
+  .gchip-n{font-size:clamp(10px,min(5cqw,7.5cqh),28px);color:#333;line-height:1.6}
+  .srow input{flex:1;font-size:clamp(11px,min(6cqw,9cqh),30px);padding:3px 6px;border:1.5px solid #e0e0e0;border-radius:7px;background:#fff;font-family:inherit;min-width:0}
+  .sval{font-size:clamp(16px,min(10cqw,15cqh),60px);font-weight:700;min-width:clamp(28px,min(11cqw,16cqh),72px);text-align:center;color:#2c3e50}
+  .sbtn{width:clamp(22px,min(9cqw,13cqh),56px);height:clamp(22px,min(9cqw,13cqh),56px);border-radius:50%;border:none;cursor:pointer;font-size:clamp(13px,min(6.5cqw,10cqh),34px);display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0}
   .sbtn.minus{background:#ffd6d6;color:#c0392b}.sbtn.plus{background:#d5f5e3;color:#27ae60}
   .ttext{flex:1;font-size:clamp(11px,4.5cqw,22px);color:#333;word-break:break-all}
   .ttext.done{text-decoration:line-through;color:#bbb}
@@ -135,7 +135,7 @@ html,body{width:100%;height:100%;overflow:hidden;font-family:'Segoe UI',system-u
 .gconf-row label{font-size:11px;color:#666}
 .gconf-row select,.gconf-row input[type=number]{font-size:11px;padding:3px 6px;border:1.5px solid #e0e0e0;border-radius:6px;background:#fff;font-family:inherit}
 .gmember-row{display:flex;align-items:center;justify-content:space-between;gap:4px;padding:1px 0}
-.gmember-row select{font-size:9px;border-radius:5px;border:1px solid #ddd;padding:1px 2px}
+.gmember-row select{font-size:clamp(9px,min(3cqw,4.5cqh),18px);border-radius:5px;border:1px solid #ddd;padding:1px 2px;font-family:inherit}
 .ghist-item{font-size:10px;color:#0c8599;background:#e3fafc;border-left:3px solid #15aabf;border-radius:6px;padding:5px 7px;margin-bottom:4px}
 .gender-badge{position:absolute;top:-3px;left:-3px;width:16px;height:16px;border-radius:50%;font-size:9px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#fff;font-weight:700;box-shadow:0 1px 3px rgba(0,0,0,0.3)}
 .login-card{background:#fff;border-radius:18px;padding:26px;width:300px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:12px}
